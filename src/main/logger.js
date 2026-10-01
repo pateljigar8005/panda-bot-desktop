@@ -1,5 +1,4 @@
 // Main-process log. Console for now (visible in the terminal during `npm run dev`).
-// Never pass secrets (tokens, sid, mc, passwords) to it.
 const stamp = () => new Date().toISOString();
 
 module.exports = {

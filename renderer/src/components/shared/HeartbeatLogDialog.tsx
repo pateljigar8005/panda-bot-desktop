@@ -18,6 +18,9 @@ import type { Account, HeartbeatLog, HeartbeatLogSort } from '@/types'
 
 const LOG_LIMIT = 10 // entries per page
 
+// The only GET among the logged platform calls (see platformClient.js USER_INFO_ENDPOINT)
+const USER_INFO_ENDPOINT = '/yewu12/user/getUserInfoPB'
+
 /** Plain-language hints for platform codes we know about. */
 const CODE_HINTS: Record<string, string> = {
   '0401013': 'Token expired — paste a fresh token URL on the Edit page.',
@@ -130,7 +133,7 @@ function LogEntry({ log }: { log: HeartbeatLog }) {
               {log.apiBase && (
                 <div className="space-y-1">
                   <div className="text-xs font-medium text-muted-foreground">Request URL</div>
-                  <div className="break-all rounded-md bg-muted p-2 font-mono text-xs">POST {log.apiBase}{log.endpoint ?? ''}</div>
+                  <div className="break-all rounded-md bg-muted p-2 font-mono text-xs">{log.endpoint === USER_INFO_ENDPOINT ? 'GET' : 'POST'} {log.apiBase}{log.endpoint ?? ''}</div>
                 </div>
               )}
               <Json label="Response" value={log.responseBody} />

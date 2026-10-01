@@ -20,13 +20,14 @@ export interface Account {
   name: string
   uid: string
   deviceId: DeviceId
-  /** Decrypted; only on GET /accounts/:id (for the edit form). Null for accounts saved before it was stored. */
+  /** Only on GET /accounts/:id (for the edit form). Null for accounts saved before it was stored. */
   tokenUrl?: string | null
-  tokenEncrypted: string
-  sessionIdEncrypted: string
-  sidEncrypted: string | null
-  mcEncrypted: string | null
-  /** Why fetching sid/mc from the platform failed; null once it succeeds. Without sid/mc there are no heartbeats. */
+  /** Masked by the server (never sent in the clear) — see accountJSON. */
+  token: string
+  sessionId: string
+  sid: string | null
+  mc: string | null
+  /** Why fetching mc from the platform failed; null once it succeeds. Without sid/mc there are no heartbeats. */
   setupError?: string | null
   /** Why / when it was put on hold (status 'on_hold'). */
   holdReason?: string | null

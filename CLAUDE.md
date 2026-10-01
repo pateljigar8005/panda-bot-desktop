@@ -28,8 +28,11 @@ Run Electron through `scripts/electron.js` (npm scripts do): editor terminals se
 ## Rules
 
 - Commits and PRs: **no `Co-Authored-By` or any AI attribution.**
-- Never print, log or commit secrets: tokens (`requestid`, `token=`), sid, mc, sessionId, sign,
-  passwords. Redact before logging; mask when reading `full_session_log.txt` (git-ignored, live tokens).
+- Never commit secrets (tokens, sid, mc, sessionId, sign, passwords) to git. The app's own
+  Activity/Audit logs intentionally store them unredacted now (local app, single user, the
+  person's own accounts — see `api-spec`/`architecture` skills). Still mask them when reading
+  `full_session_log.txt` in conversation (git-ignored, but a much larger blast radius if pasted
+  around than the app's local DB).
 - Platform requests must match the captured client exactly (headers, values, order) — keep the
   wire-order test passing.
 - Main process = CommonJS JavaScript, matching the ported server code. UI = TypeScript + React.

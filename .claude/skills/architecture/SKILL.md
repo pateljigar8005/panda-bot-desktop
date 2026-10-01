@@ -14,8 +14,9 @@ React UI). It is now **one desktop app for Windows and macOS; everything runs on
 - **No server, no API service.** Nothing listens on a port.
 - **No authentication.** No login, users, JWT, invites or password reset. The app opens straight
   to the dashboard. Audit entries are "You" (user action) or "System" (automatic).
-- **Secrets stay encrypted at rest** (AES-256-GCM) with a random key kept in the OS keychain via
-  Electron `safeStorage` — a copied database file is useless on another machine.
+- **Platform credentials (token/sid/mc/sessionId) are stored in plain**, not encrypted at rest:
+  single local user, no server, no multi-tenant isolation to protect — `encryptionService` +
+  the OS-keychain key (`safeStorage`) stay in place only for proxy and SMTP passwords.
 - **Local storage: SQLite** (single file in the user-data folder) instead of MongoDB.
 - **No Redis / BullMQ.** Kill-switch flag lives in SQLite + memory; jobs use an in-process,
   per-account queue.
@@ -68,7 +69,8 @@ Drop: Express, middleware (helmet, CORS, rate limits), auth, socket.io, Redis, B
 ## Security rules (Electron)
 
 - Window: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Never relax these.
-- Secrets never cross into the renderer — send it only redacted data.
+- Credentials sent to the renderer are masked in `accountJSON`/`masterJSON` (the Accounts/Master
+  pages), but Activity/Audit log entries carry real values on purpose now — see CLAUDE.md.
 - CSP forbids remote scripts and inline scripts; ship everything with the app.
 - New windows are denied; external https links open in the browser; navigation away from the app is blocked.
 - IPC handlers must validate input like the old express-validator rules did.

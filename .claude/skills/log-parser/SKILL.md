@@ -27,7 +27,8 @@ Blocks separated by lines of `=`. Each block:
 
 Never print live values. Mask before showing output:
 - `requestid` header and `token=` query values (40 hex), `sid`, `mc`, `sessionId`, `sign`, `code`
-  in heartbeat bodies, and gzip `data` blobs (they decode to sid/mc).
+  in heartbeat bodies, and gzip `data` blobs (getUserInfoPB decodes to `mc`, not `sid` — sid never
+  appears in a server response, see `api-spec`).
 - e.g. `sed -E 's/[0-9a-f]{40}/<TOKEN>/g'`, or print only header names / body field names.
 
 ## Output

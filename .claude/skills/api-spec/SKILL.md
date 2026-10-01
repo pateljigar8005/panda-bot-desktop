@@ -36,11 +36,29 @@ accept: application/json, text/plain, */*
 content-type: application/json         (POST only)
 ```
 
-getUserInfoPB has its own, smaller set, in this order:
-`sec-ch-ua-platform, requestid, referer, user-agent, accept, sec-ch-ua, sec-ch-ua-mobile`.
+getUserInfoPB on iOS (mobile-browser capture, `full_session_log.txt`) has its own, smaller set,
+in this order: `sec-ch-ua-platform, requestid, referer, user-agent, accept, sec-ch-ua, sec-ch-ua-mobile`.
 
-Never sent by the real client: `origin`, `accept-language`. Do not add them.
-Header order on the wire matters — see the `anti-detection` skill for the axios pitfalls.
+getUserInfoPB on **Android** is different again: captured live from inside the real app's embedded
+WebView (proxy intercept, not in `full_session_log.txt` — that capture is a plain browser session,
+not the native app). A WebView auto-adds headers a bare browser tab never sends. Order:
+```
+accept: application/json, text/plain, */*
+requestid: <token>
+user-agent: <Android WebView UA — see platformClient ANDROID_WEBVIEW_USER_AGENT>
+origin: https://app-h5.lzy21.com
+x-requested-with: <the app's own Android package name>
+sec-fetch-site: cross-site
+sec-fetch-mode: cors
+sec-fetch-dest: empty
+referer: https://app-h5.lzy21.com/
+accept-language: en-US,en;q=0.9
+```
+No `sec-ch-ua*` headers on this path at all.
+
+Everywhere else (the standard set above, and getUserInfoPB on iOS): `origin`/`accept-language` are
+**not** sent by the real client — don't add them there. Header order on the wire matters — see the
+`anti-detection` skill for the axios pitfalls.
 
 deviceId: `1` = iOS, `2` = Android. Only `sec-ch-ua-platform`, `user-agent` and the heartbeat `os` differ.
 
@@ -48,15 +66,21 @@ deviceId: `1` = iOS, `2` = Android. Only `sec-ch-ua-platform`, `user-agent` and 
 
 | Call | Request | Notes |
 |---|---|---|
-| User info | `GET /yewu12/user/getUserInfoPB?token=<token>` | Nothing else in the URL, no body. `data` is gzip → `{ userId, mId, sid, mc, … }` |
+| User info | `GET /yewu12/user/getUserInfoPB?token=<token>` | Nothing else in the URL, no body. `data` is gzip → `{ userId, mId, mc, … }`. **No `sid` in here** — confirmed by decoding real captures, despite old code/comments assuming otherwise. |
 | Heartbeat | `POST /yewu40/req/request?t=<ms>` | Body `{ sessionId, os, sid, uid, code, device, sign, t }`; `os` = `ios`/`android`, `code` = `mc`, `device` = deviceId |
 | Balance | `GET /yewu12/user/amount?uid=<uid>&t=<ms>` | `data.amount` (may be gzip) |
 | Place bet | `POST /yewu13/v1/betOrder/betPB?t=<ms>` | Standard headers, no `sign`. Body is the master's bet payload (`orderDetailList`, `seriesOrders`, `acceptOdds`, …) |
 | Analytics (optional) | `POST /yewu40/req/dataCollect` | `sign` = `MD5(sessionId + deviceId + salt)`, salt from config (`PANDA_DATA_COLLECT_SALT`) |
 
+`sid` is never returned by the server: the real client generates a UUIDv4 (dashes stripped) once
+client-side and persists it in `localStorage.unique_uuid` for the life of the browser profile
+(`request_file.js:40512`, `init_uid`). We generate one per account (`signatureService.generateSid`)
+and reuse it forever, the same way.
+
 Signatures (`signatureService`):
 - heartbeat `sign` = `MD5(sid + "|" + mc + "|" + uid)`
-- `checkid` = `pc-` + 16 random bytes hex + `-<uid>-` + `Date.now()`
+- `checkid` = `pc-` + 16 random bytes hex + `-<sid>-` + `Date.now()` (confirmed against
+  `full_session_log.txt:14` — the middle segment is `sid`, not `uid`)
 
 ## Responses
 
@@ -67,5 +91,7 @@ Signatures (`signatureService`):
 
 ## Secrets
 
-`requestid`/`token`, `sid`, `mc`, `sessionId`, `sign`, `code` (= mc) are secrets: encrypt at rest, redact before
-logging (`redactDeep`, `redactPayload`), never print them in output or commit them.
+`requestid`/`token`, `sid`, `mc`, `sessionId`, `sign`, `code` (= mc) are secrets: never commit them.
+Stored in plain in the local SQLite file — not encrypted at rest, and the Activity/Audit logs
+store them unredacted too (local app, single user — see CLAUDE.md). Proxy and SMTP passwords are
+a separate category and do stay encrypted.

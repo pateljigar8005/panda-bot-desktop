@@ -1,19 +1,9 @@
-const encryptionService = require('./encryptionService');
-
 /**
- * The token URL embeds the platform token + sessionId, so it is stored encrypted
- * (`tokenUrlEncrypted`) and only returned decrypted on the single-item GET that
- * the edit form uses — never in list responses.
+ * The token URL embeds the platform token + sessionId. Stored in plain (see db.js migration 1)
+ * and only returned on the single-item GET that the edit form uses — never in list responses.
  */
 function readTokenUrl(doc) {
-    if (!doc.tokenUrlEncrypted) return null;
-    try {
-        return encryptionService.decrypt(doc.tokenUrlEncrypted);
-    } catch (err) {
-        // Corrupt value or encryption key changed: treat as "no saved URL" rather than failing the request
-        console.warn(`⚠️  Could not decrypt tokenUrl for ${doc._id}: ${err.message}`);
-        return null;
-    }
+    return doc.tokenUrl ?? null;
 }
 
 /**

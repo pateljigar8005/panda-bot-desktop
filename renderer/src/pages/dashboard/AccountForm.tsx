@@ -119,7 +119,7 @@ function AccountFormBody({ account }: { account?: Account }) {
     }
     mutation.mutate(payload, {
       onSuccess: (saved) => {
-        if (!saved.sidEncrypted || !saved.mcEncrypted) {
+        if (!saved.sid || !saved.mc) {
           // Saved, but the platform lookup failed: show the platform's reply and open the account's log
           toast.error(`${isEdit ? 'Account updated' : 'Account saved'}, but setup failed — heartbeats can't start`, {
             description: saved.setupError || 'Session details (sid/mc) could not be fetched from the platform.',

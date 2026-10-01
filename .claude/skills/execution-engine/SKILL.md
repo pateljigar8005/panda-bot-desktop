@@ -9,14 +9,15 @@ description: How heartbeats and copy-betting run — heartbeat scheduler, failur
 
 - One timer loop per operational account (status active, not on hold, kill switch off).
 - Every beat: interval ± jitter (system settings), `POST /yewu40/req/request` with
-  `sign = MD5(sid|mc|uid)` — no browser needed; sid/mc come from getUserInfoPB at account setup.
+  `sign = MD5(sid|mc|uid)` — no browser needed; mc comes from getUserInfoPB at account setup, sid
+  is generated locally (`signatureService.generateSid`) — see the `api-spec` skill.
 - Each run has a run token, so a restarted loop can't overlap the old one.
 - Success → `consecutiveFailures = 0`. Failure → `heartbeatErrors += 1` (total, reset only by "Clear log")
   and `consecutiveFailures += 1` (current streak).
 - Streak ≥ `autoHoldAfterFailures` → status `on_hold` (+ `holdReason`, `heldAt`), audit entry
   `account_auto_held` (System), notification `accountOnHold`.
 - Expired code `0401013` (check `result.code ?? result.responseCode`) → status `expired`, notify.
-- Every log entry records `apiBase` + `endpoint` + redacted request/response.
+- Every log entry records `apiBase` + `endpoint` + the real request/response (not redacted — local app, single user).
 
 ## Copy-betting (to build)
 

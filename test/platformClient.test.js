@@ -5,17 +5,16 @@ const assert = require('node:assert/strict');
 require('dotenv').config();
 
 // Domain discovery stubbed before platformClient loads (it imports getApiBase at require time)
-const apiDomainService = require('../services/apiDomainService');
+const apiDomainService = require('../src/main/services/apiDomainService');
 let domain = 'https://api.first.com';
 apiDomainService.getApiBase = async () => domain;
 
-const encryptionService = require('../services/encryptionService');
-const { http: axios, sendHeartbeat, fetchUserInfo, fetchBalance } = require('../services/platformClient');
+const { http: axios, sendHeartbeat, fetchUserInfo, fetchBalance } = require('../src/main/services/platformClient');
 
+const SID = '3e25f2c24b9543c8b1f298a829e84a6d'; // shape of a real sid: UUIDv4, dashes stripped
 const account = {
     _id: 'a1', uid: '537206819374508284', deviceId: '2', proxyId: null,
-    tokenEncrypted: encryptionService.encrypt('tok'), sessionIdEncrypted: encryptionService.encrypt('sess'),
-    sidEncrypted: encryptionService.encrypt('sid'), mcEncrypted: encryptionService.encrypt('mc')
+    token: 'tok', sessionId: 'sess', sid: SID, mc: 'mc'
 };
 
 test('heartbeat result records the exact domain + endpoint the request went to', async (t) => {
@@ -48,29 +47,28 @@ test('failed requests record the domain too (network error, HTTP error, platform
     await assert.rejects(fetchUserInfo('1', 'tok', '2'), (err) => err.apiBase === 'https://api.first.com' && err.responseCode === '0401013');
 });
 
-test('getUserInfoPB success: request + decoded response kept for the log, with sid/mc/tokens redacted', async (t) => {
+test('getUserInfoPB success: request + decoded response kept for the log, real values (no sid in this response)', async (t) => {
     const zlib = require('zlib');
-    const userInfo = { userId: '537206819374508284', mId: 'm1', sid: 'SECRET-SID', mc: 'SECRET-MC', token: 'SECRET-TOKEN', nickName: 'Jigar', balance: 12.5, vip: { level: 2, sessionKey: 'SECRET-SESSION' } };
+    const userInfo = { userId: '537206819374508284', mId: 'm1', mc: 'REAL-MC', token: 'REAL-TOKEN', nickName: 'Jigar', balance: 12.5, vip: { level: 2, sessionKey: 'REAL-SESSION' } };
     const data = zlib.gzipSync(JSON.stringify(userInfo)).toString('base64');
     t.mock.method(axios, 'get', async () => ({ status: 200, data: { code: '0000000', msg: 'ok', data } }));
 
     const info = await fetchUserInfo('537206819374508284', 'tok', '2');
-    assert.equal(info.sid, 'SECRET-SID', 'the real values are still returned for encryption');
-    assert.deepEqual(info.requestPayload, { token: '[redacted]' });
+    assert.equal(info.sid, undefined, 'sid is never part of getUserInfoPB — generated locally instead');
+    assert.deepEqual(info.requestPayload, { token: 'tok' });
     assert.equal(info.statusCode, 200);
     assert.equal(info.responseCode, '0000000');
     assert.deepEqual(info.responseBody, {
         code: '0000000',
         msg: 'ok',
-        data: { userId: '537206819374508284', mId: 'm1', sid: '[redacted]', mc: '[redacted]', token: '[redacted]', nickName: 'Jigar', balance: 12.5, vip: { level: 2, sessionKey: '[redacted]' } }
+        data: { userId: '537206819374508284', mId: 'm1', mc: 'REAL-MC', token: 'REAL-TOKEN', nickName: 'Jigar', balance: 12.5, vip: { level: 2, sessionKey: 'REAL-SESSION' } }
     });
-    assert.ok(!JSON.stringify(info.responseBody).includes('SECRET'), 'nothing secret in what gets logged');
 });
 
-test('getUserInfoPB failure bodies are redacted too', async (t) => {
-    t.mock.method(axios, 'get', async () => ({ status: 200, data: { code: '0401013', msg: 'expired', token: 'SECRET-T' } }));
+test('getUserInfoPB failure bodies carry real values too (not redacted — local app, single user)', async (t) => {
+    t.mock.method(axios, 'get', async () => ({ status: 200, data: { code: '0401013', msg: 'expired', token: 'REAL-T' } }));
     await assert.rejects(fetchUserInfo('1', 'tok', '2'), (err) =>
-        err.responseBody.token === '[redacted]' && err.responseBody.code === '0401013' && err.requestPayload.token === '[redacted]');
+        err.responseBody.token === 'REAL-T' && err.responseBody.code === '0401013' && err.requestPayload.token === 'tok');
 });
 
 
@@ -90,6 +88,7 @@ test('headers on the wire match the real client: same names, same order, content
         assert.equal((await sendHeartbeat(account)).success, true);
         await fetchBalance(account);
         await fetchUserInfo(account.uid, 'tok', '1').catch(() => {}); // reply isn't gzip: only the request matters here
+        await fetchUserInfo(account.uid, 'tok', '2').catch(() => {});
     } finally {
         server.close();
         domain = 'https://api.first.com';
@@ -106,7 +105,7 @@ test('headers on the wire match the real client: same names, same order, content
         assert.equal(headers['sec-ch-ua'], '"Chromium";v="153", "Not_A Brand";v="8"');
         assert.equal(headers['sec-ch-ua-platform'], '"Android"');
         assert.equal(headers.accept, 'application/json, text/plain, */*');
-        assert.match(headers.checkid, /^pc-[0-9a-f]{32}-537206819374508284-\d+$/);
+        assert.match(headers.checkid, new RegExp(`^pc-[0-9a-f]{32}-${SID}-\\d+$`));
         assert.equal(headers.origin, undefined);
         assert.equal(headers['accept-language'], undefined);
     }
@@ -120,4 +119,16 @@ test('headers on the wire match the real client: same names, same order, content
         ['sec-ch-ua-platform', 'requestid', 'referer', 'user-agent', 'accept', 'sec-ch-ua', 'sec-ch-ua-mobile']);
     assert.equal(info.headers['sec-ch-ua-platform'], '"iOS"');
     assert.equal(info.headers.requestid, 'tok');
+
+    // getUserInfoPB on Android: the real app's embedded WebView, not the browser session above —
+    // Origin/X-Requested-With/Sec-Fetch-* (captured via proxy intercept), no sec-ch-ua* at all
+    const infoAndroid = seen[3];
+    assert.equal(infoAndroid.method, 'GET');
+    assert.deepEqual(infoAndroid.names.filter((n) => !transport.has(n.toLowerCase())),
+        ['accept', 'requestid', 'user-agent', 'origin', 'x-requested-with', 'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest', 'referer', 'accept-language']);
+    assert.equal(infoAndroid.headers.origin, 'https://app-h5.lzy21.com');
+    assert.equal(infoAndroid.headers['x-requested-with'], 'com.fqwbqhdzajanq.icrelafkach');
+    assert.equal(infoAndroid.headers['sec-fetch-site'], 'cross-site');
+    assert.equal(infoAndroid.headers['accept-language'], 'en-US,en;q=0.9');
+    assert.equal(infoAndroid.headers['sec-ch-ua-platform'], undefined, 'Android getUserInfoPB sends no sec-ch-ua* headers');
 });

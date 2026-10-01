@@ -1,7 +1,27 @@
 const path = require('node:path');
-const { app, BrowserWindow, session, shell } = require('electron');
+const { app, BrowserWindow, session, shell, safeStorage } = require('electron');
 const { registerScheme, registerAppProtocol, isAppUrl, ORIGIN } = require('./appProtocol');
 const { registerIpc } = require('./ipc');
+const db = require('./db');
+const { loadOrCreateKey } = require('./services/keyStore');
+const encryptionService = require('./services/encryptionService');
+const systemSettings = require('./services/systemSettingsService');
+const killSwitch = require('./services/killSwitchService');
+const heartbeatScheduler = require('./services/heartbeatScheduler');
+const logger = require('./logger');
+
+const DB_FILE = 'panda.db';
+
+/** Open storage and load everything that must be ready before any IPC request or heartbeat runs. */
+function initStorage() {
+    const dataDir = app.getPath('userData');
+    // Key first: db.open() runs migrations, and the credentials-to-plain migration decrypts
+    // existing rows with it (see db.js migrateCredentialsToPlain).
+    encryptionService.setKey(loadOrCreateKey(dataDir, safeStorage));
+    db.open(path.join(dataDir, DB_FILE));
+    systemSettings.load();
+    killSwitch.load();
+}
 
 // Dev only: `npm run dev` passes the Vite server URL. A packaged app always loads its own files.
 const devUrlArg = process.argv.find((a) => a.startsWith('--dev-url='));
@@ -70,9 +90,12 @@ if (!app.requestSingleInstanceLock()) {
         // The UI needs no camera, microphone, notifications-from-web, etc.
         session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
 
+        initStorage();
         registerAppProtocol();
         registerIpc({ devUrl: DEV_URL });
         createMainWindow();
+
+        heartbeatScheduler.startAll().catch((err) => logger.error('Failed to start heartbeat loops', err.message));
 
         app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
@@ -81,5 +104,12 @@ if (!app.requestSingleInstanceLock()) {
 
     app.on('window-all-closed', () => {
         if (process.platform !== 'darwin') app.quit();
+    });
+
+    // Stop timers before the database closes under them; node:sqlite has no in-flight writes
+    // to flush, but a heartbeat mid-tick could otherwise try to write after close().
+    app.on('before-quit', () => {
+        heartbeatScheduler.stopAll();
+        db.close();
     });
 }

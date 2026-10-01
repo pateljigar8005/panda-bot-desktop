@@ -74,5 +74,5 @@ export const useAssignProxy = () => {
 /** Not cached: a connection test is a one-off action with a result to toast. */
 export const useTestAccount = () => useMutation({ mutationFn: (id: string) => accountService.test(id) })
 
-/** Heartbeats need sid/mc from the platform; without them the scheduler never starts. */
-export const isSetupIncomplete = (account: Pick<Account, 'sidEncrypted' | 'mcEncrypted'>) => !account.sidEncrypted || !account.mcEncrypted
+/** Heartbeats need sid/mc; without them the scheduler never starts. sid is always generated locally — mc is what the platform lookup actually proves. */
+export const isSetupIncomplete = (account: Pick<Account, 'sid' | 'mc'>) => !account.sid || !account.mc

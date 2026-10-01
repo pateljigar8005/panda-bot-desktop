@@ -1,7 +1,6 @@
 const axios = require('axios');
 const zlib = require('zlib');
 const { generateCheckId, generateHeartbeatSign } = require('./signatureService');
-const encryptionService = require('./encryptionService');
 const { axiosProxyOptions, getAccountProxy } = require('./proxyService');
 const { getApiBase } = require('./apiDomainService');
 
@@ -11,12 +10,19 @@ const WEB_ORIGIN = config.platform.webOrigin;
 
 // Copied from captured traffic of the real web client (full_session_log.txt, 336 API requests):
 // same headers, same values, same order. iOS and Android differ only in platform + user-agent.
-// Not sent by the real client: origin, accept-language. content-type only on POST.
+// Not sent by this browser session: origin, accept-language. content-type only on POST.
+// (getUserInfoPB on Android is the one exception — see ANDROID_WEBVIEW_USER_AGENT below.)
 const USER_AGENTS = {
     ios: 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1',
     android: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36'
 };
 const SEC_CH_UA = '"Chromium";v="153", "Not_A Brand";v="8"';
+
+// getUserInfoPB on Android: captured live from inside the real app's embedded WebView (proxy
+// intercept), not the plain mobile-browser session above — a WebView auto-adds X-Requested-With
+// (its own package name) plus Origin/Sec-Fetch-*, which a bare browser tab never sends.
+const ANDROID_WEBVIEW_USER_AGENT = 'Mozilla/5.0 (Linux; Android 14; sdk_gphone64_arm64 Build/UE1A.230829.050; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/113.0.5672.136 Mobile Safari/537.36';
+const ANDROID_APP_PACKAGE = 'com.fqwbqhdzajanq.icrelafkach';
 
 // Own axios instance without the global defaults: they'd put Accept / Content-Type first (capitalised)
 // and break the captured order. Only transport headers (Content-Length, Accept-Encoding, Host,
@@ -25,12 +31,12 @@ const http = axios.create();
 delete http.defaults.headers.common.Accept;
 delete http.defaults.headers.common['Content-Type'];
 
-function buildHeaders(token, uid, deviceId, method = 'POST') {
+function buildHeaders(token, sid, deviceId, method = 'POST') {
     const isIOS = deviceId === '1';
     const headers = {
         'sec-ch-ua-platform': isIOS ? '"iOS"' : '"Android"',
         'lang': 'zh',
-        'checkid': generateCheckId(uid),
+        'checkid': generateCheckId(sid),
         'sec-ch-ua': SEC_CH_UA,
         'request-code': '{"panda-bss-source":"1"}',
         'referer': `${WEB_ORIGIN}/`,
@@ -43,17 +49,32 @@ function buildHeaders(token, uid, deviceId, method = 'POST') {
     return headers;
 }
 
-// getUserInfoPB is a plain GET in the capture: fewer headers, in this order (no lang/checkid/request-code)
+// getUserInfoPB is a plain GET. iOS: the mobile-browser capture, fewer headers, no lang/checkid/
+// request-code. Android: the real app's embedded WebView (see ANDROID_WEBVIEW_USER_AGENT above) —
+// a different, larger header set, same order as the capture.
 function buildUserInfoHeaders(token, deviceId) {
-    const isIOS = deviceId === '1';
+    if (deviceId === '1') {
+        return {
+            'sec-ch-ua-platform': '"iOS"',
+            'requestid': token,
+            'referer': `${WEB_ORIGIN}/`,
+            'user-agent': USER_AGENTS.ios,
+            'accept': 'application/json, text/plain, */*',
+            'sec-ch-ua': SEC_CH_UA,
+            'sec-ch-ua-mobile': '?1'
+        };
+    }
     return {
-        'sec-ch-ua-platform': isIOS ? '"iOS"' : '"Android"',
-        'requestid': token,
-        'referer': `${WEB_ORIGIN}/`,
-        'user-agent': isIOS ? USER_AGENTS.ios : USER_AGENTS.android,
         'accept': 'application/json, text/plain, */*',
-        'sec-ch-ua': SEC_CH_UA,
-        'sec-ch-ua-mobile': '?1'
+        'requestid': token,
+        'user-agent': ANDROID_WEBVIEW_USER_AGENT,
+        'origin': WEB_ORIGIN,
+        'x-requested-with': ANDROID_APP_PACKAGE,
+        'sec-fetch-site': 'cross-site',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-dest': 'empty',
+        'referer': `${WEB_ORIGIN}/`,
+        'accept-language': 'en-US,en;q=0.9'
     };
 }
 
@@ -75,7 +96,7 @@ function lookupError(message, { statusCode = null, responseCode = null, response
     const err = new Error(message);
     err.statusCode = statusCode;
     err.responseCode = responseCode;
-    err.responseBody = redactDeep(responseBody);
+    err.responseBody = capDepth(responseBody);
     err.requestPayload = requestPayload;
     err.apiBase = apiBase;     // which platform domain the request went to (it rotates)
     err.endpoint = endpoint;
@@ -83,18 +104,15 @@ function lookupError(message, { statusCode = null, responseCode = null, response
 }
 
 /**
- * Copy of a platform response that's safe to store in logs: any token / session / sid / mc /
- * password / secret field is replaced, at any depth. The platform result `code` is kept.
+ * Copy of a platform response that's safe to store in logs: not redacted (local app, single
+ * user — see CLAUDE.md) but depth/length capped so a huge or malformed reply can't bloat the log.
  */
-const SECRET_RESPONSE_KEY = /^(sid|mc|sign)$|token|session|secret|passw|pwd/i;
-function redactDeep(value, depth = 0) {
+function capDepth(value, depth = 0) {
     if (value === null || typeof value !== 'object') return value;
     if (depth > 6) return '[…]';
-    if (Array.isArray(value)) return value.slice(0, 100).map((v) => redactDeep(v, depth + 1));
+    if (Array.isArray(value)) return value.slice(0, 100).map((v) => capDepth(v, depth + 1));
     const out = {};
-    for (const [k, v] of Object.entries(value)) {
-        out[k] = SECRET_RESPONSE_KEY.test(k) && v !== null && v !== '' ? '[redacted]' : redactDeep(v, depth + 1);
-    }
+    for (const [k, v] of Object.entries(value)) out[k] = capDepth(v, depth + 1);
     return out;
 }
 
@@ -109,13 +127,15 @@ function platformMessage(body) {
 }
 
 /**
- * Fetch mc / sid / mId from getUserInfoPB
+ * Fetch mc / mId from getUserInfoPB.
+ * sid is NOT part of this response (confirmed by decoding real captures) — the real client
+ * generates it locally (see signatureService.generateSid) and never gets it from the server.
  * `proxy` is a Proxy document (or null for a direct connection).
  */
 async function fetchUserInfo(uid, token, deviceId, proxy = null) {
     // Resolved once per call, so the logged domain is exactly the one the request used
     const apiBase = await getApiBase();
-    const requestPayload = { token: '[redacted]' }; // what we send, for the log; the token itself is never logged
+    const requestPayload = { token }; // what we send, for the log
     const where = { apiBase, endpoint: USER_INFO_ENDPOINT, requestPayload };
     let response;
     try {
@@ -149,52 +169,29 @@ async function fetchUserInfo(uid, token, deviceId, proxy = null) {
     if (!decoded) {
         throw lookupError('Failed to decode getUserInfoPB response', { statusCode: response.status, responseCode: response.data?.code ?? null, responseBody: response.data, ...where });
     }
-    // The reply as the app would see it: envelope + decoded user info (secrets redacted when stored)
+    // The reply as the app would see it: envelope + decoded user info
     const readableBody = { ...response.data, data: decoded };
 
-    if (!decoded.sid || !decoded.mc) {
-        throw lookupError('getUserInfoPB response has no sid/mc', { statusCode: response.status, responseCode: response.data?.code ?? null, responseBody: readableBody, ...where });
+    if (!decoded.mc) {
+        throw lookupError('getUserInfoPB response has no mc', { statusCode: response.status, responseCode: response.data?.code ?? null, responseBody: readableBody, ...where });
     }
 
     return {
         mc: decoded.mc,
-        sid: decoded.sid,
         mId: decoded.mId,
         uid: decoded.userId,
         ...where,
         statusCode: response.status,
         responseCode: response.data?.code ?? null,
-        responseBody: redactDeep(readableBody)   // for the log: sid / mc / tokens redacted
+        responseBody: capDepth(readableBody)
     };
 }
 
 /**
  * Send one heartbeat
  */
-// Secrets that must never be persisted (heartbeat logs) or returned by the API in plaintext
-const SECRET_PAYLOAD_FIELDS = ['sessionId', 'sid', 'code', 'sign'];
-
-function redactPayload(payload) {
-    if (!payload) return null;
-    const out = { ...payload };
-    for (const field of SECRET_PAYLOAD_FIELDS) {
-        if (out[field] !== undefined) out[field] = '[redacted]';
-    }
-    return out;
-}
-
 async function sendHeartbeat(account) {
-    let token, sessionId, sid, mc;
-    try {
-        token = encryptionService.decrypt(account.tokenEncrypted);
-        sessionId = encryptionService.decrypt(account.sessionIdEncrypted);
-        sid = encryptionService.decrypt(account.sidEncrypted);
-        mc = encryptionService.decrypt(account.mcEncrypted);
-    } catch (error) {
-        // Corrupt value or ENCRYPTION_KEY changed — report it as a failed heartbeat, don't throw
-        return { success: false, error: `Credential decryption failed: ${error.message}`, requestPayload: null };
-    }
-
+    const { token, sessionId, sid, mc } = account;
     const sign = generateHeartbeatSign(sid, mc, account.uid);
     const timestamp = Date.now();
 
@@ -219,7 +216,7 @@ async function sendHeartbeat(account) {
             `${apiBase}${HEARTBEAT_ENDPOINT}?t=${timestamp}`,
             payload,
             {
-                headers: buildHeaders(token, account.uid, account.deviceId),
+                headers: buildHeaders(token, sid, account.deviceId),
                 timeout: 10000,
                 ...axiosProxyOptions(proxy)
             }
@@ -231,7 +228,7 @@ async function sendHeartbeat(account) {
             code,
             statusCode: response.status,
             response: response.data,
-            requestPayload: redactPayload(payload),   // for logging — secrets removed
+            requestPayload: payload,
             ...where
         };
     } catch (error) {
@@ -241,7 +238,7 @@ async function sendHeartbeat(account) {
             statusCode: error.response?.status,
             responseCode: error.response?.data?.code,
             response: error.response?.data || null,
-            requestPayload: redactPayload(payload),   // for logging — secrets removed
+            requestPayload: payload,
             ...where
         };
     }
@@ -255,13 +252,13 @@ async function fetchBalance(account) {
     const timestamp = Date.now();
 
     try {
-        const token = encryptionService.decrypt(account.tokenEncrypted);
+        const { token, sid } = account;
         const proxy = await getAccountProxy(account);
         const response = await http.get(
             `${await getApiBase()}/yewu12/user/amount`,
             {
                 params: { uid: account.uid, t: timestamp },
-                headers: buildHeaders(token, account.uid, account.deviceId, 'GET'),
+                headers: buildHeaders(token, sid, account.deviceId, 'GET'),
                 timeout: 10000,
                 ...axiosProxyOptions(proxy)
             }
@@ -298,4 +295,4 @@ async function fetchBalance(account) {
     }
 }
 
-module.exports = { http, redactDeep, fetchUserInfo, sendHeartbeat, fetchBalance, decodeGzip, buildHeaders, buildUserInfoHeaders, redactPayload, SECRET_PAYLOAD_FIELDS };
+module.exports = { http, fetchUserInfo, sendHeartbeat, fetchBalance, decodeGzip, buildHeaders, buildUserInfoHeaders };

@@ -36,12 +36,10 @@ const ACTIONS = {
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const RESOURCE_TYPES = { accounts: 'account', proxies: 'proxy', master: 'master', settings: 'settings', system: 'system' };
 
-// Never stored: credentials, tokens and anything that embeds them
-const SECRET_KEY = /pass(word)?|token|secret|session|^sid$|^mc$|authorization|cookie|key$|credential|encrypted/i;
 const MAX_STRING = 300;
 const MAX_DEPTH = 4;
 
-/** Copy of the request body safe to store: secrets redacted, long strings cut, depth limited. */
+/** Copy of the request body safe to store: not redacted (local app, single user — see CLAUDE.md), long strings cut, depth limited. */
 function sanitize(value, depth = 0) {
     if (value === null || value === undefined) return value;
     if (typeof value === 'string') return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…` : value;
@@ -49,9 +47,7 @@ function sanitize(value, depth = 0) {
     if (depth >= MAX_DEPTH) return '[…]';
     if (Array.isArray(value)) return value.slice(0, 50).map((v) => sanitize(v, depth + 1));
     const out = {};
-    for (const [key, v] of Object.entries(value)) {
-        out[key] = SECRET_KEY.test(key) ? (v === undefined || v === null || v === '' ? v : '[redacted]') : sanitize(v, depth + 1);
-    }
+    for (const [key, v] of Object.entries(value)) out[key] = sanitize(v, depth + 1);
     return out;
 }
 

@@ -222,8 +222,8 @@ export default function AccountDetail() {
                 <Row label="Token URL">{MASK}</Row>
                 <Row label="Token">{MASK}</Row>
                 <Row label="Session ID">{MASK}</Row>
-                <Row label="SID">{account.sidEncrypted ? MASK : <Missing />}</Row>
-                <Row label="MC">{account.mcEncrypted ? MASK : <Missing />}</Row>
+                <Row label="SID">{account.sid ? MASK : <Missing />}</Row>
+                <Row label="MC">{account.mc ? MASK : <Missing />}</Row>
                 <Row label="M ID">{account.mId ?? '—'}</Row>
               </dl>
             </CardContent>

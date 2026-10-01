@@ -83,4 +83,112 @@ async function beat(id, run) {
         code: result.code || result.responseCode || null, latencyMs, apiBase: result.apiBase ?? null
     });
 
-    // Went
+    // Went out through the proxy? (requestPayload is null only if we never got as far as sending)
+    const usedProxy = Boolean(fresh.proxyId && result.requestPayload);
+
+    if (result.success) {
+        recordSuccess(fresh, usedProxy);
+        scheduleNext(id, run);
+        return;
+    }
+
+    // The platform reports an expired token either as HTTP 401 or as code 0401013 inside a normal
+    // HTTP 200 reply (result.code). Missing the latter kept expired accounts heartbeating.
+    const code = result.code || result.responseCode || null;
+    const expired = result.statusCode === 401 || code === '0401013' || code === '401';
+    const counts = recordFailure(fresh, usedProxy, expired);
+    const reason = result.error || [code, result.response?.msg].filter(Boolean).join(' · ') || `HTTP ${result.statusCode ?? '—'}`;
+
+    if (expired) {
+        activeTimers.delete(id);
+        void notificationService.notify('tokenExpired', fresh, `The platform rejected the token (${reason}). Heartbeats stopped; paste a fresh token URL on the Edit page.`);
+        return;
+    }
+
+    // Too many failures in a row: stop hitting the platform before it looks like unusual activity
+    // or trips its rate limits. The owner resumes it with Activate.
+    const holdAfter = systemSettings.get().autoHoldAfterFailures;
+    if (holdAfter > 0 && counts.consecutiveFailures >= holdAfter) {
+        const holdReason = `On hold after ${counts.consecutiveFailures} failed heartbeats in a row. Last error: ${reason}`;
+        if (putOnHold(fresh, holdReason)) {
+            activeTimers.delete(id);
+            recordSystemAction('account_auto_held', { account: fresh, meta: { consecutiveFailures: counts.consecutiveFailures, lastError: reason } });
+            void notificationService.notify('accountOnHold', fresh, `${holdReason}. No requests are sent until you resume it (Activate).`);
+            return;
+        }
+    }
+
+    void notificationService.onHeartbeatFailure(fresh, counts.consecutiveFailures, reason);
+    scheduleNext(id, run);
+}
+
+/** Interval ± jitter from Settings → Automation, read fresh on every beat so changes apply next tick. */
+function nextDelay() {
+    const { heartbeatIntervalMs, heartbeatJitterMs } = systemSettings.get();
+    return heartbeatIntervalMs + (Math.random() - 0.5) * 2 * heartbeatJitterMs;
+}
+
+function scheduleNext(id, run) {
+    run.timer = setTimeout(() => {
+        beat(id, run).catch((err) => {
+            logger.error(`Heartbeat loop crashed for account ${id}`, err.message);
+            if (isCurrent(id, run)) scheduleNext(id, run); // never let one bad tick kill the loop
+        });
+    }, nextDelay());
+}
+
+/**
+ * Start the heartbeat loop for an account. Returns false if it can't run (missing sid/mc) —
+ * sid is generated locally, mc comes from getUserInfoPB.
+ */
+function startAccount(account) {
+    const id = account._id;
+    if (activeTimers.has(id)) return true;
+    if (killSwitch.isActive()) return false; // nothing runs while the kill switch is on
+    if (!account.sid || !account.mc) {
+        logger.warn(`Skipping ${account.name} — missing sid/mc`);
+        return false;
+    }
+    const run = { timer: null };
+    activeTimers.set(id, run);
+    scheduleNext(id, run);
+    return true;
+}
+
+function stopAccount(accountId) {
+    const run = activeTimers.get(accountId);
+    if (run) {
+        clearTimeout(run.timer);
+        activeTimers.delete(accountId);
+    }
+}
+
+/** Start every active account (staggered). Returns how many loops were started. */
+async function startAll() {
+    if (killSwitch.isActive()) {
+        logger.warn('Kill switch is ON — not starting heartbeats');
+        return 0;
+    }
+    const accounts = Accounts.find({ where: 'status = ?', params: ['active'] });
+    let started = 0;
+    for (const account of accounts) {
+        if (killSwitch.isActive()) break; // switched on while we were starting
+        if (!startAccount(account)) continue;
+        started++;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return started;
+}
+
+/** Stop every loop immediately (kill switch). In-flight heartbeats finish but never reschedule. Returns the count. */
+function stopAll() {
+    const count = activeTimers.size;
+    for (const run of activeTimers.values()) clearTimeout(run.timer);
+    activeTimers.clear();
+    return count;
+}
+
+/** Number of running heartbeat loops. */
+const runningCount = () => activeTimers.size;
+
+module.exports = { startAccount, stopAccount, startAll, stopAll, runningCount };

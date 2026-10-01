@@ -13,30 +13,34 @@ const mask = (value) => (value ? MASK : value);
 /** True if the account may send heartbeats and place bets. */
 const isOperational = (account) => account?.status === 'active';
 
-/** Account as the UI sees it: credentials masked, the encrypted token URL never included. */
+/**
+ * Account as the UI sees it: platform credentials masked (never sent in the clear to the
+ * renderer), the token URL never included. Not encrypted at rest — see db.js migration 1.
+ */
 function accountJSON(account) {
     if (!account) return null;
-    const { tokenUrlEncrypted, ...rest } = account; // eslint-disable-line no-unused-vars
+    const { tokenUrl, ...rest } = account; // eslint-disable-line no-unused-vars
     return {
         ...rest,
-        tokenEncrypted: mask(rest.tokenEncrypted),
-        sessionIdEncrypted: mask(rest.sessionIdEncrypted),
-        sidEncrypted: mask(rest.sidEncrypted),
-        mcEncrypted: mask(rest.mcEncrypted)
+        token: mask(rest.token),
+        sessionId: mask(rest.sessionId),
+        sid: mask(rest.sid),
+        mc: mask(rest.mc)
     };
 }
 
 function masterJSON(master) {
     if (!master) return null;
-    const { tokenUrlEncrypted, ...rest } = master; // eslint-disable-line no-unused-vars
+    const { tokenUrl, ...rest } = master; // eslint-disable-line no-unused-vars
     return {
         ...rest,
-        tokenEncrypted: mask(rest.tokenEncrypted),
-        sessionIdEncrypted: mask(rest.sessionIdEncrypted),
-        sidEncrypted: mask(rest.sidEncrypted)
+        token: mask(rest.token),
+        sessionId: mask(rest.sessionId),
+        sid: mask(rest.sid)
     };
 }
 
+// Proxy/SMTP passwords are unrelated to platform credentials and stay encrypted at rest.
 const proxyJSON = (proxy) => (proxy ? { ...proxy, passwordEncrypted: mask(proxy.passwordEncrypted) } : null);
 
 module.exports = { Accounts, Proxies, Master, HeartbeatLogs, AuditLogs, isOperational, accountJSON, masterJSON, proxyJSON };

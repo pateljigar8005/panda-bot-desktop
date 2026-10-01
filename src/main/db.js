@@ -1,5 +1,7 @@
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
+const encryptionService = require('./services/encryptionService');
+const logger = require('./logger');
 
 /**
  * Local storage: one SQLite file in the user's data folder (node:sqlite, built into Electron's
@@ -9,7 +11,48 @@ const { DatabaseSync } = require('node:sqlite');
 
 let db = null;
 
+/**
+ * Migration 1: platform credentials were AES-256-GCM encrypted at rest; on this single-user
+ * desktop app that's not protecting against anything a local attacker couldn't already get from
+ * the OS-keychain-protected key file sitting right next to it, so we stop. Rename the columns
+ * and decrypt whatever's already in them — encryptionService.setKey() must already have run
+ * (index.js loads the key before calling db.open()). A value that fails to decrypt is left as-is
+ * (already plain, or corrupt) rather than losing it.
+ */
+function decryptColumn(conn, table, column) {
+    const rows = conn.prepare(`SELECT _id, ${column} FROM ${table} WHERE ${column} IS NOT NULL`).all();
+    if (!rows.length) return;
+    const update = conn.prepare(`UPDATE ${table} SET ${column} = ? WHERE _id = ?`);
+    for (const row of rows) {
+        let plain;
+        try {
+            plain = encryptionService.decrypt(row[column]);
+        } catch (err) {
+            logger.warn(`Migration: could not decrypt ${table}.${column} for ${row._id}, leaving as-is`, err.message);
+            continue;
+        }
+        update.run(plain, row._id);
+    }
+}
+
+function migrateCredentialsToPlain(conn) {
+    conn.exec(`
+        ALTER TABLE accounts RENAME COLUMN tokenUrlEncrypted TO tokenUrl;
+        ALTER TABLE accounts RENAME COLUMN tokenEncrypted TO token;
+        ALTER TABLE accounts RENAME COLUMN sessionIdEncrypted TO sessionId;
+        ALTER TABLE accounts RENAME COLUMN sidEncrypted TO sid;
+        ALTER TABLE accounts RENAME COLUMN mcEncrypted TO mc;
+        ALTER TABLE master_account RENAME COLUMN tokenUrlEncrypted TO tokenUrl;
+        ALTER TABLE master_account RENAME COLUMN tokenEncrypted TO token;
+        ALTER TABLE master_account RENAME COLUMN sessionIdEncrypted TO sessionId;
+        ALTER TABLE master_account RENAME COLUMN sidEncrypted TO sid;
+    `);
+    for (const col of ['tokenUrl', 'token', 'sessionId', 'sid', 'mc']) decryptColumn(conn, 'accounts', col);
+    for (const col of ['tokenUrl', 'token', 'sessionId', 'sid']) decryptColumn(conn, 'master_account', col);
+}
+
 // Each entry runs once, in order; the applied count is kept in PRAGMA user_version.
+// A function entry (vs. a plain SQL string) gets the open DatabaseSync passed to it.
 const MIGRATIONS = [
     `
     CREATE TABLE proxies (
@@ -130,14 +173,19 @@ const MIGRATIONS = [
         value TEXT NOT NULL,
         updatedAt TEXT NOT NULL
     );
-    `
+    `,
+    // Desktop app, single local user, OS-keychain-protected data folder is out of scope for this
+    // threat model: stop encrypting platform credentials at rest. (Proxy/SMTP passwords are
+    // unrelated and stay encrypted — see encryptionService.)
+    migrateCredentialsToPlain
 ];
 
 function migrate() {
     const version = db.prepare('PRAGMA user_version').get().user_version;
     for (let i = version; i < MIGRATIONS.length; i++) {
         transaction(() => {
-            db.exec(MIGRATIONS[i]);
+            const step = MIGRATIONS[i];
+            if (typeof step === 'function') step(db); else db.exec(step);
             db.exec(`PRAGMA user_version = ${i + 1}`);
         });
     }
