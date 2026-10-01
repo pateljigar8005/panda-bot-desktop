@@ -1,0 +1,43 @@
+appId: com.pandabot.desktop
+productName: Panda Bot
+copyright: Copyright © 2026 Panda Bot
+
+directories:
+  output: release
+  buildResources: build
+
+# Only what the app runs: main process, preload, built UI. Sources, tests and dev tools stay out.
+files:
+  - package.json
+  - src/main/**
+  - src/preload/**
+  - dist/renderer/**
+
+asar: true
+
+mac:
+  category: public.app-category.utilities
+  icon: build/icon.png
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  artifactName: Panda-Bot-${version}-mac-${arch}.${ext}
+  # Signing + notarization need an Apple Developer ID (see README)
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Panda-Bot-${version}-windows-setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: Panda Bot
+  # Accounts, logs and settings live in the user's data folder; keep them on uninstall
+  deleteAppDataOnUninstall: false
+
+dmg:
+  title: Panda Bot ${version}

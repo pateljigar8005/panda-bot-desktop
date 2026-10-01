@@ -1,0 +1,10 @@
+node_modules
+dist
+release
+.env
+*.local
+.DS_Store
+
+# Captured platform traffic contains live tokens: never commit it
+*session_log*.txt
+*.har

@@ -1,0 +1,9 @@
+// Main-process log. Console for now (visible in the terminal during `npm run dev`).
+// Never pass secrets (tokens, sid, mc, passwords) to it.
+const stamp = () => new Date().toISOString();
+
+module.exports = {
+    info: (message, meta) => console.log(stamp(), 'INFO ', message, meta ?? ''),
+    warn: (message, meta) => console.warn(stamp(), 'WARN ', message, meta ?? ''),
+    error: (message, meta) => console.error(stamp(), 'ERROR', message, meta ?? '')
+};
