@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import i18n from '@/i18n'
 import { getErrorMessage } from '@/services/api'
 import { useActivateAccount, useDeactivateAccount, useDeleteAccount, useTestAccount } from '@/hooks/useAccounts'
 import type { Account } from '@/types'
@@ -18,7 +19,7 @@ export function useAccountActions() {
 
     runTest: (account: Account) =>
       test.mutate(account._id, {
-        onSuccess: (r) => (r.success ? toast.success(`Connection OK · ${r.latencyMs} ms`) : toast.error(r.message || 'Connection failed')),
+        onSuccess: (r) => (r.success ? toast.success(i18n.t('accountActions.connectionOk', { ms: r.latencyMs })) : toast.error(r.message || i18n.t('accountActions.connectionFailed'))),
         onError,
       }),
 
@@ -27,8 +28,8 @@ export function useAccountActions() {
       ;(inactive ? activate : deactivate).mutate(account._id, {
         onSuccess: () =>
           inactive
-            ? toast.success(`${account.name} ${account.status === 'on_hold' ? 'resumed' : 'activated'}`, { description: 'Heartbeats restart and betting is allowed again.' })
-            : toast.success(`${account.name} deactivated`, { description: 'No heartbeats and no bets until you activate it.' }),
+            ? toast.success(i18n.t(account.status === 'on_hold' ? 'accountActions.resumed' : 'accountActions.activated', { name: account.name }), { description: i18n.t('accountActions.resumedDescription') })
+            : toast.success(i18n.t('accountActions.deactivated', { name: account.name }), { description: i18n.t('accountActions.deactivatedDescription') }),
         onError,
       })
     },
@@ -36,7 +37,7 @@ export function useAccountActions() {
     remove: (account: Account, onDone?: () => void) =>
       del.mutate(account._id, {
         onSuccess: () => {
-          toast.success('Account deleted')
+          toast.success(i18n.t('accountActions.deleted'))
           onDone?.()
         },
         onError,
@@ -49,10 +50,10 @@ export const canToggle = (account: Account) => ['active', 'inactive', 'on_hold']
 /** Labels for the activate/deactivate action (tooltip and button). */
 export const toggleLabel = (account: Account) =>
   account.status === 'on_hold'
-    ? 'Resume account (clear the hold and restart heartbeats)'
+    ? i18n.t('accountActions.toggleResume')
     : account.status === 'inactive'
-      ? 'Activate account (resume heartbeats and betting)'
-      : 'Deactivate account (stop heartbeats and betting)'
+      ? i18n.t('accountActions.toggleActivate')
+      : i18n.t('accountActions.toggleDeactivate')
 
 /** Off (by the user, or automatically) — the action turns it back on. */
 export const isOff = (account: Account) => account.status === 'inactive' || account.status === 'on_hold'

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { useUiStore } from '@/store/uiStore'
@@ -8,6 +9,7 @@ import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 
 export function DashboardLayout() {
+  const { t } = useTranslation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const collapsed = useUiStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
@@ -25,8 +27,8 @@ export function DashboardLayout() {
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-64 p-0">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <SheetDescription className="sr-only">Main navigation links</SheetDescription>
+          <SheetTitle className="sr-only">{t('layout.navigation')}</SheetTitle>
+          <SheetDescription className="sr-only">{t('layout.navigationDescription')}</SheetDescription>
           <Sidebar onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>

@@ -1,7 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, ArrowLeft } from 'lucide-react'
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { NumberInput } from '@/components/shared/NumberInput'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -46,6 +48,7 @@ const toFormValues = (p: Proxy): ProxyFormValues => ({
 
 /** Create (/proxies/new) and edit (/proxies/:id/edit) share this page. */
 export default function ProxyFormPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const isEdit = !!id
   const proxy = useProxy(id)
@@ -53,12 +56,12 @@ export default function ProxyFormPage() {
   return (
     <>
       <PageHeader
-        title={isEdit ? `Edit ${proxy.data?.name ?? 'proxy'}` : 'Add proxy'}
-        description={isEdit ? 'Update proxy connection details.' : 'Register a new proxy.'}
+        title={isEdit ? t('proxyForm.editTitle', { name: proxy.data?.name ?? t('proxyForm.proxy') }) : t('proxyForm.addTitle')}
+        description={isEdit ? t('proxyForm.editDescription') : t('proxyForm.addDescription')}
         actions={
           <Button variant="outline" asChild>
             <Link to="/proxies">
-              <ArrowLeft /> Back
+              <ArrowLeft /> {t('common.back')}
             </Link>
           </Button>
         }
@@ -68,7 +71,7 @@ export default function ProxyFormPage() {
       ) : isEdit && proxy.isError ? (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Couldn’t load proxy</AlertTitle>
+          <AlertTitle>{t('proxyForm.couldNotLoad')}</AlertTitle>
           <AlertDescription>{getErrorMessage(proxy.error)}</AlertDescription>
         </Alert>
       ) : (
@@ -79,6 +82,8 @@ export default function ProxyFormPage() {
 }
 
 function ProxyFormBody({ proxy }: { proxy?: Proxy }) {
+  const { t } = useTranslation()
+  const schema = useMemo(() => proxySchema(t), [t])
   const navigate = useNavigate()
   const isEdit = !!proxy
   const create = useCreateProxy()
@@ -86,7 +91,7 @@ function ProxyFormBody({ proxy }: { proxy?: Proxy }) {
   const mutation = isEdit ? update : create
 
   const form = useForm<ProxyFormValues>({
-    resolver: zodResolver(proxySchema),
+    resolver: zodResolver(schema),
     defaultValues: proxy ? toFormValues(proxy) : emptyValues,
   })
 
@@ -104,7 +109,7 @@ function ProxyFormBody({ proxy }: { proxy?: Proxy }) {
     }
     mutation.mutate(payload, {
       onSuccess: () => {
-        toast.success(isEdit ? 'Proxy updated' : 'Proxy created')
+        toast.success(isEdit ? t('proxyForm.updated') : t('proxyForm.created'))
         navigate('/proxies')
       },
       onError: (error) => toast.error(getErrorMessage(error)),
@@ -132,15 +137,15 @@ function ProxyFormBody({ proxy }: { proxy?: Proxy }) {
       <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
         <Card>
           <CardContent className="grid gap-4 pt-6 md:grid-cols-2">
-            {text('name', 'Name', 'e.g. us-east-1')}
-            {text('provider', 'Provider (optional)')}
-            {text('host', 'Host', 'proxy.example.com')}
+            {text('name', t('proxyForm.name'), 'e.g. us-east-1')}
+            {text('provider', t('proxyForm.provider'))}
+            {text('host', t('proxyForm.host'), 'proxy.example.com')}
             <FormField
               control={form.control}
               name="port"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Port</FormLabel>
+                  <FormLabel>{t('proxyForm.port')}</FormLabel>
                   <FormControl>
                     <NumberInput step={1} {...field} />
                   </FormControl>
@@ -148,17 +153,17 @@ function ProxyFormBody({ proxy }: { proxy?: Proxy }) {
                 </FormItem>
               )}
             />
-            {text('username', 'Username (optional)')}
+            {text('username', t('proxyForm.username'))}
             <FormField
               control={form.control}
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password (optional)</FormLabel>
+                  <FormLabel>{t('proxyForm.password')}</FormLabel>
                   <FormControl>
                     <PasswordInput autoComplete="new-password" {...field} value={field.value ?? ''} />
                   </FormControl>
-                  {isEdit && <FormDescription>Leave blank to keep the current password.</FormDescription>}
+                  {isEdit && <FormDescription>{t('proxyForm.passwordHint')}</FormDescription>}
                   <FormMessage />
                 </FormItem>
               )}
@@ -168,7 +173,7 @@ function ProxyFormBody({ proxy }: { proxy?: Proxy }) {
               name="protocol"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Protocol</FormLabel>
+                  <FormLabel>{t('proxyForm.protocol')}</FormLabel>
                   <FormControl>
                     <SelectField
                       value={field.value}
@@ -184,13 +189,13 @@ function ProxyFormBody({ proxy }: { proxy?: Proxy }) {
                 </FormItem>
               )}
             />
-            {text('country', 'Country (optional)', 'e.g. US')}
+            {text('country', t('proxyForm.country'), 'e.g. US')}
             <FormField
               control={form.control}
               name="notes"
               render={({ field }) => (
                 <FormItem className="md:col-span-2">
-                  <FormLabel>Notes (optional)</FormLabel>
+                  <FormLabel>{t('proxyForm.notes')}</FormLabel>
                   <FormControl>
                     <Textarea rows={3} {...field} value={field.value ?? ''} />
                   </FormControl>
@@ -203,11 +208,11 @@ function ProxyFormBody({ proxy }: { proxy?: Proxy }) {
 
         <div className="mt-6 flex justify-end gap-2">
           <Button type="button" variant="outline" asChild>
-            <Link to="/proxies">Cancel</Link>
+            <Link to="/proxies">{t('common.cancel')}</Link>
           </Button>
           <Button type="submit" disabled={mutation.isPending}>
             {mutation.isPending && <Spinner />}
-            {isEdit ? 'Save changes' : 'Create proxy'}
+            {isEdit ? t('proxyForm.saveChanges') : t('proxyForm.createProxy')}
           </Button>
         </div>
       </form>

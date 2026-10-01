@@ -1,5 +1,6 @@
 import { CheckCircle2, Network, Radio, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { PlaceholderCard } from '@/components/shared/PlaceholderCard'
 import { StatCard } from '@/components/shared/StatCard'
@@ -14,6 +15,7 @@ import { useProxies } from '@/hooks/useProxies'
 import { mockChart } from '@/lib/mockData'
 
 export default function Overview() {
+  const { t } = useTranslation()
   const recent = useAccounts({ page: 1, limit: 5 })
   const active = useAccounts({ page: 1, limit: 1, status: 'active' })
   const proxies = useProxies({ page: 1, limit: 1 })
@@ -25,19 +27,19 @@ export default function Overview() {
     <>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Total Accounts" icon={Users} loading={recent.isLoading} value={num(recent.data?.pagination.total)} />
-        <StatCard title="Active Accounts" icon={CheckCircle2} loading={active.isLoading} value={num(active.data?.pagination.total)} />
-        <StatCard title="Total Proxies" icon={Network} loading={proxies.isLoading} value={num(proxies.data?.pagination.total)} />
+        <StatCard title={t('overview.totalAccounts')} icon={Users} loading={recent.isLoading} value={num(recent.data?.pagination.total)} />
+        <StatCard title={t('overview.activeAccounts')} icon={CheckCircle2} loading={active.isLoading} value={num(active.data?.pagination.total)} />
+        <StatCard title={t('overview.totalProxies')} icon={Network} loading={proxies.isLoading} value={num(proxies.data?.pagination.total)} />
         <StatCard
-          title="Master Account"
+          title={t('overview.masterAccount')}
           icon={Radio}
           loading={master.isLoading}
-          value={master.isError ? '—' : master.data ? master.data.status[0].toUpperCase() + master.data.status.slice(1) : 'Not set'}
+          value={master.isError ? '—' : master.data ? t(`status.${master.data.status}`, master.data.status) : t('overview.notSet')}
           hint={master.data?.name}
         />
       </div>
 
-      <PlaceholderCard title="Activity" description="Placeholder data — real stats come in a later phase.">
+      <PlaceholderCard title={t('overview.activity')} description={t('overview.activityDescription')}>
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={mockChart} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -60,19 +62,19 @@ export default function Overview() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold leading-none tracking-tight">Recent accounts</h2>
+          <h2 className="text-lg font-semibold leading-none tracking-tight">{t('overview.recentAccounts')}</h2>
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/accounts">View all</Link>
+            <Link to="/accounts">{t('overview.viewAll')}</Link>
           </Button>
         </div>
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Name</TableHead>
-                <TableHead>UID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last heartbeat</TableHead>
+                <TableHead>{t('overview.columnName')}</TableHead>
+                <TableHead>{t('overview.columnUid')}</TableHead>
+                <TableHead>{t('overview.columnStatus')}</TableHead>
+                <TableHead>{t('overview.columnLastHeartbeat')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -106,7 +108,7 @@ export default function Overview() {
               ) : (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                    {recent.isError ? 'Couldn’t load accounts.' : 'No accounts yet.'}
+                    {recent.isError ? t('overview.couldNotLoad') : t('overview.noAccountsYet')}
                   </TableCell>
                 </TableRow>
               )}

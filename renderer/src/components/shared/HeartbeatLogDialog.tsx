@@ -1,7 +1,11 @@
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, RefreshCw, Search, Trash2, X, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Eye, RefreshCw, Search, Trash2, X, XCircle } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { IconAction } from '@/components/shared/IconAction'
 import { SelectField } from '@/components/shared/SelectField'
 import { formatExact, RelativeTime } from '@/components/shared/RelativeTime'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -21,14 +25,8 @@ const LOG_LIMIT = 10 // entries per page
 // The only GET among the logged platform calls (see platformClient.js USER_INFO_ENDPOINT)
 const USER_INFO_ENDPOINT = '/yewu12/user/getUserInfoPB'
 
-/** Plain-language hints for platform codes we know about. */
-const CODE_HINTS: Record<string, string> = {
-  '0401013': 'Token expired — paste a fresh token URL on the Edit page.',
-  '401': 'Unauthorized — the token is no longer valid.',
-}
-
 /** "https://api.3qttu0s.com" → "api.3qttu0s.com" (port kept). */
-const domainLabel = (apiBase: string) => {
+export const domainLabel = (apiBase: string) => {
   try {
     return new URL(apiBase).host
   } catch {
@@ -37,25 +35,27 @@ const domainLabel = (apiBase: string) => {
 }
 
 /** Our error, else the platform's own message (e.g. { code, msg: 'token invalid' }), else a generic line. */
-function errorText(log: HeartbeatLog) {
+function errorText(log: HeartbeatLog, t: TFunction) {
   if (log.errorMessage) return log.errorMessage
   const body = log.responseBody as { msg?: unknown; message?: unknown } | null | undefined
   const platformMsg = body?.msg ?? body?.message
-  if (typeof platformMsg === 'string' && platformMsg) return `Platform: ${platformMsg}`
-  return log.event === 'setup' ? 'Setup failed' : 'Heartbeat rejected by the platform'
+  if (typeof platformMsg === 'string' && platformMsg) return t('heartbeatLog.platformMessage', { message: platformMsg })
+  return log.event === 'setup' ? t('heartbeatLog.setupFailed') : t('heartbeatLog.heartbeatRejected')
 }
 
-function hintFor(log: HeartbeatLog) {
-  if (log.responseCode && CODE_HINTS[log.responseCode]) return CODE_HINTS[log.responseCode]
+/** Plain-language hints for platform codes/errors we know about. */
+function hintFor(log: HeartbeatLog, t: TFunction) {
+  if (log.responseCode === '0401013') return t('heartbeatLog.hintTokenExpired')
+  if (log.responseCode === '401') return t('heartbeatLog.hintUnauthorized')
   const msg = log.errorMessage ?? ''
-  if (/ENOTFOUND|EAI_AGAIN/.test(msg)) return 'Host not found — check the proxy host, or remove the proxy.'
-  if (/ECONNREFUSED/.test(msg)) return 'Connection refused — the proxy or platform is not accepting connections.'
-  if (/timeout|ETIMEDOUT/i.test(msg)) return 'Timed out — slow proxy or platform.'
-  if (/decryption failed/i.test(msg)) return 'Stored credentials could not be decrypted — update the token URL.'
+  if (/ENOTFOUND|EAI_AGAIN/.test(msg)) return t('heartbeatLog.hintHostNotFound')
+  if (/ECONNREFUSED/.test(msg)) return t('heartbeatLog.hintConnectionRefused')
+  if (/timeout|ETIMEDOUT/i.test(msg)) return t('heartbeatLog.hintTimedOut')
+  if (/decryption failed/i.test(msg)) return t('heartbeatLog.hintDecryptionFailed')
   return null
 }
 
-function Stat({ label, value, tone, hint }: { label: string; value: string | number; tone?: 'good' | 'bad'; hint?: string }) {
+export function Stat({ label, value, tone, hint }: { label: string; value: string | number; tone?: 'good' | 'bad'; hint?: string }) {
   return (
     <div className="rounded-md border px-3 py-2">
       <div className="text-xs text-muted-foreground">{label}</div>
@@ -75,9 +75,41 @@ function Json({ label, value }: { label: string; value: unknown }) {
   )
 }
 
-function LogEntry({ log }: { log: HeartbeatLog }) {
-  const [open, setOpen] = useState(false)
-  const hint = log.success ? null : hintFor(log)
+/** Request/response detail for one log entry, in its own popup instead of expanding the row. */
+function LogDetailDialog({ log, open, onOpenChange }: { log: HeartbeatLog; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation()
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {log.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : <XCircle className="h-4 w-4 shrink-0 text-destructive" />}
+            {formatExact(log.createdAt)}
+          </DialogTitle>
+          {!log.success && <DialogDescription className="text-destructive">{errorText(log, t)}</DialogDescription>}
+        </DialogHeader>
+        <div className="space-y-3">
+          {log.apiBase && (
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground">{t('heartbeatLog.requestUrl')}</div>
+              <div className="break-all rounded-md bg-muted p-2 font-mono text-xs">
+                {log.endpoint === USER_INFO_ENDPOINT ? 'GET' : 'POST'} {log.apiBase}
+                {log.endpoint ?? ''}
+              </div>
+            </div>
+          )}
+          <Json label={t('heartbeatLog.response')} value={log.responseBody} />
+          <Json label={t('heartbeatLog.requestRedacted')} value={log.requestPayload} />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function LogEntry({ log, showAccount = false }: { log: HeartbeatLog; showAccount?: boolean }) {
+  const { t } = useTranslation()
+  const [detailOpen, setDetailOpen] = useState(false)
+  const hint = log.success ? null : hintFor(log, t)
   const hasDetails = log.responseBody != null || log.requestPayload != null
 
   return (
@@ -88,99 +120,80 @@ function LogEntry({ log }: { log: HeartbeatLog }) {
           <time dateTime={log.createdAt} className="tabular-nums">
             {formatExact(log.createdAt)}
           </time>
+          {showAccount && log.accountName && (
+            <Link to={`/accounts/${log.accountId}`} className="text-sm font-medium hover:underline">
+              {log.accountName}
+            </Link>
+          )}
           {log.event === 'setup' && (
-            <Badge variant="outline" className="border-warning/50 text-warning" title="Fetching session details (sid/mc) from the platform">
-              Setup
+            <Badge variant="outline" className="border-warning/50 text-warning" title={t('heartbeatLog.setupTitle')}>
+              {t('heartbeatLog.setup')}
             </Badge>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {log.apiBase && (
-            <Badge variant="secondary" className="font-mono font-normal" title={`Sent to ${log.apiBase}${log.endpoint ?? ''}`}>
+            <Badge variant="secondary" className="font-mono font-normal" title={t('heartbeatLog.sentTo', { url: `${log.apiBase}${log.endpoint ?? ''}` })}>
               {domainLabel(log.apiBase)}
             </Badge>
           )}
-          {log.statusCode != null && <Badge variant="outline">HTTP {log.statusCode}</Badge>}
-          {log.responseCode && <Badge variant="outline">Code {log.responseCode}</Badge>}
-          {log.latencyMs != null && <Badge variant="secondary">{log.latencyMs} ms</Badge>}
+          {log.statusCode != null && <Badge variant="outline">{t('heartbeatLog.http', { code: log.statusCode })}</Badge>}
+          {log.responseCode && <Badge variant="outline">{t('heartbeatLog.code', { code: log.responseCode })}</Badge>}
+          {log.latencyMs != null && <Badge variant="secondary">{t('heartbeatLog.ms', { ms: log.latencyMs })}</Badge>}
+          {(hasDetails || log.apiBase) && <IconAction label={t('heartbeatLog.viewResponseRequest')} icon={Eye} onClick={() => setDetailOpen(true)} />}
         </div>
       </div>
 
       {log.success && log.event === 'setup' && (
-        <p className="pl-6 text-sm text-muted-foreground">Session details (sid/mc) fetched — heartbeats can start.</p>
+        <p className="pl-6 text-sm text-muted-foreground">{t('heartbeatLog.setupSucceeded')}</p>
       )}
 
       {!log.success && (
         <div className="space-y-1 pl-6 text-sm">
-          <p className="break-words font-medium text-destructive">{errorText(log)}</p>
+          <p className="break-words font-medium text-destructive">{errorText(log, t)}</p>
           {hint && <p className="text-muted-foreground">{hint}</p>}
         </div>
       )}
 
-      {(hasDetails || log.apiBase) && (
-        <div className="pl-6">
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            aria-expanded={open}
-          >
-            <ChevronRight className={cn('h-3 w-3 transition-transform', open && 'rotate-90')} />
-            {open ? 'Hide' : 'Show'} response &amp; request
-          </button>
-          {open && (
-            <div className="mt-2 space-y-2">
-              {log.apiBase && (
-                <div className="space-y-1">
-                  <div className="text-xs font-medium text-muted-foreground">Request URL</div>
-                  <div className="break-all rounded-md bg-muted p-2 font-mono text-xs">{log.endpoint === USER_INFO_ENDPOINT ? 'GET' : 'POST'} {log.apiBase}{log.endpoint ?? ''}</div>
-                </div>
-              )}
-              <Json label="Response" value={log.responseBody} />
-              <Json label="Request (secrets redacted)" value={log.requestPayload} />
-            </div>
-          )}
-        </div>
-      )}
+      {(hasDetails || log.apiBase) && <LogDetailDialog log={log} open={detailOpen} onOpenChange={setDetailOpen} />}
     </li>
   )
 }
 
-const RANGES = [
-  { value: '15', label: 'Last 15 min', short: '15 min' },
-  { value: '60', label: 'Last 1 hour', short: '1h' },
-  { value: '360', label: 'Last 6 hours', short: '6h' },
-  { value: '1440', label: 'Last 24 hours', short: '24h' },
-  { value: '10080', label: 'Last 7 days', short: '7 days' },
-]
-
-const SORTS = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-  { value: 'slowest', label: 'Slowest first' },
-]
-
-const STATUSES = [
-  { value: 'all', label: 'All' },
-  { value: 'success', label: 'Success' },
-  { value: 'failed', label: 'Failed' },
-] as const
-type StatusFilter = (typeof STATUSES)[number]['value']
-
-const NO_CODE = 'none'
-const CODE_LABELS: Record<string, string> = {
-  '0000000': 'OK',
-  '0401013': 'Token expired',
-  [NO_CODE]: 'No response', // network / proxy / timeout errors
+const RANGE_VALUES = ['15', '60', '360', '1440', '10080'] as const
+/** Translated on every call, so it stays correct across a live language switch (not a module-level constant). */
+export function useRanges() {
+  const { t } = useTranslation()
+  return RANGE_VALUES.map((value) => ({ value, label: t(`heartbeatLog.rangeLabel.${value}`), short: t(`heartbeatLog.rangeShort.${value}`) }))
 }
-const codeLabel = (code: string) => (code === NO_CODE ? CODE_LABELS[code] : `${code}${CODE_LABELS[code] ? ` · ${CODE_LABELS[code]}` : ''}`)
 
-const EVENTS = [
-  { value: 'all', label: 'All events' },
-  { value: 'heartbeat', label: 'Heartbeats' },
-  { value: 'setup', label: 'Setup attempts' },
-]
-export type EventFilter = 'all' | 'heartbeat' | 'setup'
+const SORT_VALUES = ['newest', 'oldest', 'slowest'] as const
+export function useSorts() {
+  const { t } = useTranslation()
+  return SORT_VALUES.map((value) => ({ value, label: t(`heartbeatLog.sort.${value}`) }))
+}
+
+const STATUS_VALUES = ['all', 'success', 'failed'] as const
+export type StatusFilter = (typeof STATUS_VALUES)[number]
+export function useStatuses() {
+  const { t } = useTranslation()
+  return STATUS_VALUES.map((value) => ({ value, label: t(`heartbeatLog.statusFilter.${value}`) }))
+}
+
+export const NO_CODE = 'none'
+/** code === '0000000' -> "0000000 · OK"; unrecognised codes show as-is. */
+export function codeLabel(code: string, t: TFunction) {
+  if (code === NO_CODE) return t('heartbeatLog.codeNone')
+  const known = code === '0000000' ? t('heartbeatLog.codeOk') : code === '0401013' ? t('heartbeatLog.codeTokenExpired') : null
+  return known ? `${code} · ${known}` : code
+}
+
+const EVENT_VALUES = ['all', 'heartbeat', 'setup'] as const
+export type EventFilter = (typeof EVENT_VALUES)[number]
+export function useEventOptions() {
+  const { t } = useTranslation()
+  return EVENT_VALUES.map((value) => ({ value, label: t(`heartbeatLog.eventFilter.${value}`) }))
+}
 
 interface HeartbeatLogPanelProps {
   account: Account
@@ -193,6 +206,11 @@ interface HeartbeatLogPanelProps {
 
 /** Stats, filters and the paged heartbeat/setup log for one account. Used in the log dialog and the Activity Log tab. */
 export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', listClassName = 'max-h-[45vh]' }: HeartbeatLogPanelProps) {
+  const { t } = useTranslation()
+  const RANGES = useRanges()
+  const SORTS = useSorts()
+  const STATUSES = useStatuses()
+  const EVENTS = useEventOptions()
   const [status, setStatus] = useState<StatusFilter>((account.consecutiveFailures ?? 0) > 0 || initialEvent === 'setup' ? 'failed' : 'all')
   const [event, setEvent] = useState<EventFilter>(initialEvent)
   const [range, setRange] = useState('1440')
@@ -232,7 +250,7 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
   const rangeShort = RANGES.find((r) => r.value === range)?.short ?? ''
   const filtersActive = status !== 'all' || event !== 'all' || !!code || !!domain || !!q || sort !== 'newest'
   // Keep a selected code visible even if it no longer occurs in the chosen window
-  const codeOptions = [...new Set([...(logs.data?.codes ?? []), ...(code ? [code] : [])])].map((c) => ({ value: c, label: codeLabel(c) }))
+  const codeOptions = [...new Set([...(logs.data?.codes ?? []), ...(code ? [code] : [])])].map((c) => ({ value: c, label: codeLabel(c, t) }))
 
   const resetFilters = () => {
     setStatus('all')
@@ -251,17 +269,17 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
             Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[62px]" />)
           ) : (
             <>
-              <Stat label={`Total · ${rangeShort}`} value={s?.total ?? 0} />
-              <Stat label={`Succeeded · ${rangeShort}`} value={s?.success ?? 0} tone="good" />
+              <Stat label={t('heartbeatLog.statTotal', { range: rangeShort })} value={s?.total ?? 0} />
+              <Stat label={t('heartbeatLog.statSucceeded', { range: rangeShort })} value={s?.success ?? 0} tone="good" />
               <Stat
-                label={`Failed · ${rangeShort}`}
+                label={t('heartbeatLog.statFailed', { range: rangeShort })}
                 value={s?.failed ?? 0}
                 tone={s?.failed ? 'bad' : undefined}
                 // The account's counter is the current streak; this card counts every failure in the window
-                hint={(account.consecutiveFailures ?? 0) > 0 ? `${account.consecutiveFailures} in a row now` : s?.failed ? 'all recovered' : undefined}
+                hint={(account.consecutiveFailures ?? 0) > 0 ? t('heartbeatLog.inARowNow', { count: account.consecutiveFailures }) : s?.failed ? t('heartbeatLog.allRecovered') : undefined}
               />
-              <Stat label="Success rate" value={rate === null ? '—' : `${rate}%`} tone={rate !== null && rate < 95 ? 'bad' : undefined} />
-              <Stat label="Avg latency" value={s?.avgLatency ? `${Math.round(s.avgLatency)} ms` : '—'} />
+              <Stat label={t('heartbeatLog.statSuccessRate')} value={rate === null ? '—' : `${rate}%`} tone={rate !== null && rate < 95 ? 'bad' : undefined} />
+              <Stat label={t('heartbeatLog.statAvgLatency')} value={s?.avgLatency ? t('heartbeatLog.ms', { ms: Math.round(s.avgLatency) }) : '—'} />
             </>
           )}
         </div>
@@ -269,7 +287,7 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-md border p-0.5" role="group" aria-label="Filter by status">
+              <div className="inline-flex rounded-md border p-0.5" role="group" aria-label={t('heartbeatLog.filterByStatus')}>
                 {STATUSES.map((f) => (
                   <Button
                     key={f.value}
@@ -283,15 +301,15 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
                   </Button>
                 ))}
               </div>
-              <SelectField value={range} onChange={withReset(setRange)} options={RANGES} className="h-8 w-36" aria-label="Time range" />
-              <SelectField value={event} onChange={(v) => withReset(setEvent)(v as EventFilter)} options={EVENTS} className="h-8 w-40" aria-label="Event type" />
+              <SelectField value={range} onChange={withReset(setRange)} options={RANGES} className="h-8 w-36" aria-label={t('heartbeatLog.timeRange')} />
+              <SelectField value={event} onChange={(v) => withReset(setEvent)(v as EventFilter)} options={EVENTS} className="h-8 w-40" aria-label={t('heartbeatLog.eventType')} />
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="h-8" onClick={() => logs.refetch()} disabled={logs.isFetching}>
-                <RefreshCw className={cn(logs.isFetching && 'animate-spin')} /> Refresh
+                <RefreshCw className={cn(logs.isFetching && 'animate-spin')} /> {t('common.refresh')}
               </Button>
               <Button size="sm" variant="outline" className="h-8 text-destructive hover:text-destructive" onClick={() => setConfirmClear(true)}>
-                <Trash2 /> Clear log
+                <Trash2 /> {t('heartbeatLog.clearLog')}
               </Button>
             </div>
           </div>
@@ -305,24 +323,24 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
                   setSearch(e.target.value)
                   setPage(1)
                 }}
-                placeholder="Search error message…"
-                aria-label="Search error message"
+                placeholder={t('heartbeatLog.searchErrorPlaceholder')}
+                aria-label={t('heartbeatLog.searchErrorPlaceholder')}
                 className="h-8 pl-8 text-sm"
               />
             </div>
-            <SelectField value={code} onChange={withReset(setCode)} options={codeOptions} emptyLabel="All codes" className="h-8 w-56" aria-label="Filter by code" />
+            <SelectField value={code} onChange={withReset(setCode)} options={codeOptions} emptyLabel={t('heartbeatLog.allCodes')} className="h-8 w-56" aria-label={t('heartbeatLog.filterByCode')} />
             <SelectField
               value={domain}
               onChange={withReset(setDomain)}
               options={[...new Set([...(logs.data?.domains ?? []), ...(domain ? [domain] : [])])].map((d) => ({ value: d, label: domainLabel(d) }))}
-              emptyLabel="All domains"
+              emptyLabel={t('heartbeatLog.allDomains')}
               className="h-8 w-52"
-              aria-label="Filter by platform domain"
+              aria-label={t('heartbeatLog.filterByDomain')}
             />
-            <SelectField value={sort} onChange={(v) => withReset(setSort)(v as HeartbeatLogSort)} options={SORTS} className="h-8 w-36" aria-label="Sort" />
+            <SelectField value={sort} onChange={(v) => withReset(setSort)(v as HeartbeatLogSort)} options={SORTS} className="h-8 w-36" aria-label={t('heartbeatLog.sortLabel')} />
             {filtersActive && (
               <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={resetFilters}>
-                <X /> Reset
+                <X /> {t('common.reset')}
               </Button>
             )}
           </div>
@@ -331,7 +349,7 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
         {logs.isError ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>Couldn’t load heartbeat log: {getErrorMessage(logs.error)}</AlertDescription>
+            <AlertDescription>{t('heartbeatLog.couldNotLoad', { error: getErrorMessage(logs.error) })}</AlertDescription>
           </Alert>
         ) : logs.isLoading ? (
           <div className="space-y-2">
@@ -339,7 +357,7 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
           </div>
         ) : !entries?.length ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            {filtersActive ? 'No heartbeats match these filters.' : `No heartbeats in the last ${rangeShort}.`}
+            {filtersActive ? t('heartbeatLog.noneMatchFilters') : t('heartbeatLog.noneInRange', { range: rangeShort })}
           </p>
         ) : (
           <ul className={cn('divide-y overflow-y-auto pr-1', listClassName, logs.isFetching && 'opacity-80')}>
@@ -351,20 +369,18 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>
-            {pg && pg.total > 0
-              ? `Showing ${(pg.page - 1) * pg.limit + 1}–${Math.min(pg.page * pg.limit, pg.total)} of ${pg.total.toLocaleString()}`
-              : 'No entries'}{' '}
-            · logs are kept 7 days
+            {pg && pg.total > 0 ? t('heartbeatLog.showingEntries', { from: (pg.page - 1) * pg.limit + 1, to: Math.min(pg.page * pg.limit, pg.total), total: pg.total.toLocaleString() }) : t('heartbeatLog.noEntries')}{' '}
+            · {t('heartbeatLog.keptDays')}
           </span>
           {pg && pg.pages > 1 && (
             <div className="flex items-center gap-1">
-              <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setPage((p) => p - 1)} disabled={page <= 1 || logs.isFetching} aria-label="Previous page">
+              <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setPage((p) => p - 1)} disabled={page <= 1 || logs.isFetching} aria-label={t('dataTable.previousPage')}>
                 <ChevronLeft />
               </Button>
               <span className="px-1 tabular-nums">
-                Page {pg.page} of {pg.pages}
+                {t('dataTable.pageOf', { page: pg.page, pages: pg.pages })}
               </span>
-              <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setPage((p) => p + 1)} disabled={page >= pg.pages || logs.isFetching} aria-label="Next page">
+              <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setPage((p) => p + 1)} disabled={page >= pg.pages || logs.isFetching} aria-label={t('dataTable.nextPage')}>
                 <ChevronRight />
               </Button>
             </div>
@@ -375,14 +391,14 @@ export function HeartbeatLogPanel({ account, enabled, initialEvent = 'all', list
         <ConfirmDialog
           open={confirmClear}
           onOpenChange={setConfirmClear}
-          title="Permanently delete heartbeat log?"
-          description={`All heartbeat log entries for “${account.name}” will be permanently deleted and its error count reset to 0. This can't be undone. New heartbeats will keep being logged.`}
-          confirmLabel="Delete permanently"
+          title={t('heartbeatLog.clearLogTitle')}
+          description={t('heartbeatLog.clearLogDescription', { name: account.name })}
+          confirmLabel={t('heartbeatLog.deletePermanently')}
           loading={clear.isPending}
           onConfirm={() =>
             clear.mutate(account._id, {
               onSuccess: ({ deletedCount }) => {
-                toast.success(`Deleted ${deletedCount} log entr${deletedCount === 1 ? 'y' : 'ies'}`)
+                toast.success(t('heartbeatLog.deletedEntries', { count: deletedCount }))
                 setConfirmClear(false)
                 setPage(1)
               },
@@ -402,16 +418,19 @@ interface HeartbeatLogDialogProps {
 }
 
 export function HeartbeatLogDialog({ account, open, onOpenChange, initialEvent }: HeartbeatLogDialogProps) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Heartbeat log · {account.name}</DialogTitle>
+          <DialogTitle>{t('heartbeatLog.title', { name: account.name })}</DialogTitle>
           <DialogDescription>
             {account.heartbeatErrors > 0
-              ? `${account.heartbeatErrors} failed heartbeat${account.heartbeatErrors === 1 ? '' : 's'} since the log was cleared${(account.consecutiveFailures ?? 0) > 0 ? ` (${account.consecutiveFailures} in a row now)` : ' (recovered)'}. `
-              : 'No current errors. '}
-            Last successful heartbeat: <RelativeTime iso={account.lastHeartbeatAt} fallback="never" />.
+              ? t('heartbeatLog.failedSinceCleared', { count: account.heartbeatErrors }) +
+                ((account.consecutiveFailures ?? 0) > 0 ? ` ${t('heartbeatLog.inARowNowParen', { count: account.consecutiveFailures })}` : ` ${t('heartbeatLog.recoveredParen')}`) +
+                '. '
+              : `${t('heartbeatLog.noCurrentErrors')}. `}
+            {t('heartbeatLog.lastSuccessfulHeartbeat')} <RelativeTime iso={account.lastHeartbeatAt} fallback={t('heartbeatLog.never')} />.
           </DialogDescription>
         </DialogHeader>
         {/* Remount per open so filters start fresh each time */}
@@ -426,10 +445,10 @@ export function HeartbeatLogDialog({ account, open, onOpenChange, initialEvent }
  * Red while it's failing right now; amber once it has recovered; reset only by Clear log.
  */
 export function HeartbeatErrorsButton({ account }: { account: Account }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const errors = account.heartbeatErrors
   const streak = account.consecutiveFailures ?? 0
-  const plural = (n: number) => `${n} failed heartbeat${n === 1 ? '' : 's'}`
   return (
     <>
       <button
@@ -437,8 +456,8 @@ export function HeartbeatErrorsButton({ account }: { account: Account }) {
         onClick={() => setOpen(true)}
         title={
           errors > 0
-            ? `${plural(errors)} since the log was cleared${streak > 0 ? ` · ${streak} in a row now` : ' · recovered'} — view the heartbeat log`
-            : 'View heartbeat log'
+            ? t('heartbeatLog.errorsTitle', { count: errors }) + (streak > 0 ? ` · ${t('heartbeatLog.inARowNow', { count: streak })}` : ` · ${t('heartbeatLog.recovered')}`) + ` — ${t('heartbeatLog.viewHeartbeatLog')}`
+            : t('heartbeatLog.viewHeartbeatLog')
         }
         className={cn(
           'inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums transition-colors',
@@ -450,7 +469,7 @@ export function HeartbeatErrorsButton({ account }: { account: Account }) {
         )}
       >
         {errors > 0 && <AlertTriangle className="h-3 w-3" />}
-        {errors > 0 ? `${errors} error${errors === 1 ? '' : 's'}` : 'No errors'}
+        {errors > 0 ? t('heartbeatLog.errorsCount', { count: errors }) : t('heartbeatLog.noErrors')}
       </button>
       {/* Always mounted (so the close animation plays); it only fetches while open. */}
       <HeartbeatLogDialog account={account} open={open} onOpenChange={setOpen} />

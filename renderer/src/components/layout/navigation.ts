@@ -1,19 +1,19 @@
 import { Activity, FileText, Home, Network, Radio, Settings, TrendingUp, Users, type LucideIcon } from 'lucide-react'
 
 export interface NavItem {
-  label: string
+  labelKey: string
   to: string
   icon: LucideIcon
   end?: boolean
 }
 
 export const navItems: NavItem[] = [
-  { label: 'Overview', to: '/', icon: Home, end: true },
-  { label: 'Accounts', to: '/accounts', icon: Users },
-  { label: 'Proxies', to: '/proxies', icon: Network },
-  { label: 'Master', to: '/master', icon: Radio },
-  { label: 'Bets', to: '/bets', icon: TrendingUp },
-  { label: 'Monitor', to: '/monitor', icon: Activity },
-  { label: 'Settings', to: '/settings', icon: Settings },
-  { label: 'Audit', to: '/audit', icon: FileText },
+  { labelKey: 'nav.overview', to: '/', icon: Home, end: true },
+  { labelKey: 'nav.accounts', to: '/accounts', icon: Users },
+  { labelKey: 'nav.proxies', to: '/proxies', icon: Network },
+  { labelKey: 'nav.master', to: '/master', icon: Radio },
+  { labelKey: 'nav.bets', to: '/bets', icon: TrendingUp },
+  { labelKey: 'nav.monitor', to: '/monitor', icon: Activity },
+  { labelKey: 'nav.settings', to: '/settings', icon: Settings },
+  { labelKey: 'nav.audit', to: '/audit', icon: FileText },
 ]

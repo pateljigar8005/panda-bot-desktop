@@ -1,8 +1,9 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import { formatDistanceToNow } from 'date-fns'
 import { AlertTriangle, Network, Pencil, Plus, RefreshCw, Stethoscope, Trash2, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { DataTable } from '@/components/shared/DataTable'
@@ -24,6 +25,7 @@ import type { Proxy, ProxyStatus } from '@/types'
 
 /** Account count for a proxy; opens the accounts dialog. */
 function AccountsCell({ proxy }: { proxy: Proxy }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const n = proxy.accountCount ?? 0
   return (
@@ -31,13 +33,13 @@ function AccountsCell({ proxy }: { proxy: Proxy }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="See and manage accounts using this proxy"
+        title={t('proxies.seeManageAccounts')}
         className={cn(
           'inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums transition-colors hover:bg-accent',
           n === 0 && 'text-muted-foreground',
         )}
       >
-        <Users className="h-3 w-3" /> {n} account{n === 1 ? '' : 's'}
+        <Users className="h-3 w-3" /> {t('proxies.accountCount', { count: n })}
       </button>
       <ProxyAccountsDialog proxy={proxy} open={open} onOpenChange={setOpen} />
     </>
@@ -45,6 +47,7 @@ function AccountsCell({ proxy }: { proxy: Proxy }) {
 }
 
 function RowActions({ proxy }: { proxy: Proxy }) {
+  const { t } = useTranslation()
   const health = useProxyHealthCheck()
   const del = useDeleteProxy()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -57,30 +60,30 @@ function RowActions({ proxy }: { proxy: Proxy }) {
 
   const check = () =>
     health.mutate(proxy._id, {
-      onSuccess: (r) => (r.success ? toast.success(`${proxy.name} is ${r.status} · ${r.latencyMs} ms · ${r.ip}`) : toast.error(`${proxy.name} is ${r.status}`)),
+      onSuccess: (r) => (r.success ? toast.success(t('proxies.healthOk', { name: proxy.name, status: r.status, ms: r.latencyMs, ip: r.ip })) : toast.error(t('proxies.healthBad', { name: proxy.name, status: r.status }))),
       onError: (error) => toast.error(getErrorMessage(error)),
     })
 
   return (
     <>
       <div className="flex items-center justify-end gap-0.5">
-        <IconAction label="Health check (test the proxy connection)" icon={Stethoscope} onClick={check} loading={health.isPending} />
-        <IconAction label="Edit proxy" icon={Pencil} to={`/proxies/${proxy._id}/edit`} />
-        <IconAction label="Manage accounts using this proxy" icon={Users} onClick={() => setAssignOpen(true)} />
-        <IconAction label={inUse > 0 ? `Delete proxy (in use by ${inUse} account${inUse === 1 ? '' : 's'} — remove them first)` : 'Delete proxy'} icon={Trash2} onClick={requestDelete} destructive />
+        <IconAction label={t('proxies.healthCheck')} icon={Stethoscope} onClick={check} loading={health.isPending} />
+        <IconAction label={t('proxies.editProxy')} icon={Pencil} to={`/proxies/${proxy._id}/edit`} />
+        <IconAction label={t('proxies.manageAccounts')} icon={Users} onClick={() => setAssignOpen(true)} />
+        <IconAction label={inUse > 0 ? t('proxies.deleteInUse', { count: inUse }) : t('proxies.deleteProxy')} icon={Trash2} onClick={requestDelete} destructive />
       </div>
       <ProxyAccountsDialog proxy={proxy} open={assignOpen} onOpenChange={setAssignOpen} />
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Delete proxy?"
-        description={`“${proxy.name}” will be permanently removed. No accounts use it.`}
-        confirmLabel="Delete"
+        title={t('proxies.deleteTitle')}
+        description={t('proxies.deleteDescription', { name: proxy.name })}
+        confirmLabel={t('common.delete')}
         loading={del.isPending}
         onConfirm={() =>
           del.mutate(proxy._id, {
             onSuccess: () => {
-              toast.success('Proxy deleted')
+              toast.success(t('proxies.deleted'))
               setConfirmOpen(false)
             },
             onError: (error) => {
@@ -97,15 +100,14 @@ function RowActions({ proxy }: { proxy: Proxy }) {
       <Dialog open={blockedOpen} onOpenChange={setBlockedOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Can’t delete “{proxy.name}”</DialogTitle>
+            <DialogTitle>{t('proxies.cannotDelete', { name: proxy.name })}</DialogTitle>
             <DialogDescription>
-              {inUse > 0 ? `It’s used by ${inUse} account${inUse === 1 ? '' : 's'}.` : 'It’s used by one or more accounts.'} Remove it from
-              those accounts first — or move them to another proxy — then delete it.
+              {inUse > 0 ? t('proxies.usedByCount', { count: inUse }) : t('proxies.usedByAccounts')} {t('proxies.removeFirst')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setBlockedOpen(false)}>
-              Close
+              {t('common.close')}
             </Button>
             <Button
               onClick={() => {
@@ -113,7 +115,7 @@ function RowActions({ proxy }: { proxy: Proxy }) {
                 setAssignOpen(true)
               }}
             >
-              <Users /> Manage accounts
+              <Users /> {t('proxies.manageAccounts')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -124,30 +126,35 @@ function RowActions({ proxy }: { proxy: Proxy }) {
 
 // Every possible value, so filters offer all of them — not just those on the current page
 const STATUSES: ProxyStatus[] = ['healthy', 'dead', 'unknown']
-const PROXY_STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))
-const PROTOCOL_OPTIONS = [{ value: 'http', label: 'HTTP' }, { value: 'https', label: 'HTTPS' }, { value: 'socks5', label: 'SOCKS5' }]
-
-const columns: ColumnDef<Proxy>[] = [
-  { accessorKey: 'name', header: 'Name', meta: { filter: 'text' }, cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
-  { id: 'address', accessorFn: (row) => `${row.host}:${row.port}`, header: 'Host:Port', meta: { filter: 'text' } },
-  { accessorKey: 'protocol', header: 'Protocol', meta: { filter: 'select', options: PROTOCOL_OPTIONS }, cell: ({ row }) => row.original.protocol.toUpperCase() },
-  { accessorKey: 'country', header: 'Country', meta: { filter: 'select' }, cell: ({ row }) => row.original.country || '—' },
-  { accessorKey: 'status', header: 'Status', meta: { filter: 'select', options: PROXY_STATUS_OPTIONS }, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
-  { accessorKey: 'accountCount', header: 'Accounts', meta: { filter: 'number' }, cell: ({ row }) => <AccountsCell proxy={row.original} /> },
-  {
-    id: 'lastCheck',
-    accessorFn: (row) => row.lastCheck,
-    header: 'Last check',
-    meta: { filter: 'date' },
-    sortUndefined: 'last',
-    cell: ({ row }) => (row.original.lastCheck ? formatDistanceToNow(new Date(row.original.lastCheck), { addSuffix: true }) : 'Never'),
-  },
-  { id: 'actions', header: () => <span className="block text-right">Actions</span>, enableSorting: false, cell: ({ row }) => <RowActions proxy={row.original} /> },
-]
-
-
 
 export default function Proxies() {
+  const { t } = useTranslation()
+
+  const PROXY_STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: t(`status.${s}`, s).replace(/^./, (c) => c.toUpperCase()) }))
+  const PROTOCOL_OPTIONS = [{ value: 'http', label: 'HTTP' }, { value: 'https', label: 'HTTPS' }, { value: 'socks5', label: 'SOCKS5' }]
+
+  const columns: ColumnDef<Proxy>[] = useMemo(
+    () => [
+      { accessorKey: 'name', header: t('proxies.columnName'), meta: { filter: 'text' }, cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+      { id: 'address', accessorFn: (row) => `${row.host}:${row.port}`, header: t('proxies.columnHostPort'), meta: { filter: 'text' } },
+      { accessorKey: 'protocol', header: t('proxies.columnProtocol'), meta: { filter: 'select', options: PROTOCOL_OPTIONS }, cell: ({ row }) => row.original.protocol.toUpperCase() },
+      { accessorKey: 'country', header: t('proxies.columnCountry'), meta: { filter: 'select' }, cell: ({ row }) => row.original.country || '—' },
+      { accessorKey: 'status', header: t('proxies.columnStatus'), meta: { filter: 'select', options: PROXY_STATUS_OPTIONS }, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+      { accessorKey: 'accountCount', header: t('proxies.columnAccounts'), meta: { filter: 'number' }, cell: ({ row }) => <AccountsCell proxy={row.original} /> },
+      {
+        id: 'lastCheck',
+        accessorFn: (row) => row.lastCheck,
+        header: t('proxies.columnLastCheck'),
+        meta: { filter: 'date' },
+        sortUndefined: 'last',
+        cell: ({ row }) => (row.original.lastCheck ? formatDistanceToNow(new Date(row.original.lastCheck), { addSuffix: true }) : t('proxies.never')),
+      },
+      { id: 'actions', header: () => <span className="block text-right">{t('accounts.columnActions')}</span>, enableSorting: false, cell: ({ row }) => <RowActions proxy={row.original} /> },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t],
+  )
+
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(20)
   const [status, setStatus] = useState<ProxyStatus | ''>('')
@@ -171,12 +178,12 @@ export default function Proxies() {
   return (
     <>
       <PageHeader
-        title="Proxies"
-        description="Proxy pool health and account assignments."
+        title={t('proxies.title')}
+        description={t('proxies.description')}
         actions={
           <Button asChild>
             <Link to="/proxies/new">
-              <Plus /> Add Proxy
+              <Plus /> {t('proxies.addProxy')}
             </Link>
           </Button>
         }
@@ -185,11 +192,11 @@ export default function Proxies() {
       {isError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Couldn’t load proxies</AlertTitle>
+          <AlertTitle>{t('proxies.couldNotLoad')}</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-4">
             <span>{getErrorMessage(error)}</span>
             <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
-              <RefreshCw /> Retry
+              <RefreshCw /> {t('common.retry')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -198,12 +205,12 @@ export default function Proxies() {
       {showEmpty ? (
         <EmptyState
           icon={Network}
-          title="No proxies yet"
-          description="Add a proxy so accounts can connect from distinct IP addresses."
+          title={t('proxies.noneYetTitle')}
+          description={t('proxies.noneYetDescription')}
           action={
             <Button asChild>
               <Link to="/proxies/new">
-                <Plus /> Add Proxy
+                <Plus /> {t('proxies.addProxy')}
               </Link>
             </Button>
           }
@@ -214,7 +221,7 @@ export default function Proxies() {
           data={rows}
           loading={isLoading}
           globalSearch={false}
-          emptyMessage="No proxies match your filters."
+          emptyMessage={t('proxies.noneMatchFilters')}
           toolbarLeft={
             <>
               <Input
@@ -223,8 +230,8 @@ export default function Proxies() {
                   setSearch(e.target.value)
                   setPage(1)
                 }}
-                placeholder="Search name or host…"
-                aria-label="Search proxies"
+                placeholder={t('proxies.searchPlaceholder')}
+                aria-label={t('proxies.searchAriaLabel')}
                 className="sm:max-w-xs"
               />
               <SelectField
@@ -234,8 +241,8 @@ export default function Proxies() {
                   setPage(1)
                 }}
                 options={PROXY_STATUS_OPTIONS}
-                emptyLabel="All statuses"
-                aria-label="Filter by status"
+                emptyLabel={t('accounts.allStatuses')}
+                aria-label={t('accounts.filterByStatus')}
                 className="sm:w-44"
               />
             </>

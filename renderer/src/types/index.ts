@@ -133,6 +133,16 @@ export interface HeartbeatLogPage {
   sort: HeartbeatLogSort
 }
 
+/** GET /heartbeat-logs params (Live Monitor): same as HeartbeatLogParams, across every account. */
+export interface ActivityLogParams extends HeartbeatLogParams {
+  accountId?: string
+}
+
+/** GET /heartbeat-logs response: same as HeartbeatLogPage plus which accounts appear in the window. */
+export interface ActivityLogPage extends HeartbeatLogPage {
+  accounts: { accountId: string; accountName: string | null }[]
+}
+
 export interface HeartbeatStats {
   total: number
   success: number
@@ -302,13 +312,6 @@ export const SOCKET_EVENTS = [
 ] as const
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[number]
-
-export interface SocketEvent {
-  id: string
-  name: SocketEventName
-  payload: unknown
-  receivedAt: number
-}
 
 // ---------- Settings ----------
 export type SmtpSecurity = 'starttls' | 'ssl' | 'none'

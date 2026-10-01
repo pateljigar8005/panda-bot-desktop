@@ -30,7 +30,9 @@ const ACTIONS = {
     'POST /settings/notifications/test': 'notification_test_sent',
     'PUT /system/settings': 'system_settings_updated',
     'POST /system/kill-switch': 'kill_switch_activated',
-    'POST /system/kill-switch/release': 'kill_switch_released'
+    'POST /system/kill-switch/release': 'kill_switch_released',
+
+    'DELETE /heartbeat-logs': 'activity_log_cleared'
 };
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

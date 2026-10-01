@@ -1,8 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { format, formatDistanceToNow } from 'date-fns'
 import { AlertTriangle, Pencil, Play, Plus, Radio, Square, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -25,13 +26,15 @@ import { ApiError, getErrorMessage } from '@/services/api'
 import type { MasterAccount as Master } from '@/types'
 
 function MasterForm({ master, onDone }: { master?: Master; onDone: () => void }) {
+  const { t } = useTranslation()
   const isEdit = !!master
+  const schema = useMemo(() => masterSchema(isEdit, t), [isEdit, t])
   const create = useCreateMaster()
   const update = useUpdateMaster()
   const mutation = isEdit ? update : create
 
   const form = useForm<MasterFormValues>({
-    resolver: zodResolver(masterSchema(isEdit)),
+    resolver: zodResolver(schema),
     defaultValues: { name: master?.name ?? '', tokenUrl: master?.tokenUrl ?? '', deviceId: master?.deviceId ?? '1', notes: master?.notes ?? '' },
   })
 
@@ -41,7 +44,7 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
       { ...v, tokenUrl: v.tokenUrl || undefined, notes: v.notes || (isEdit ? '' : undefined) },
       {
         onSuccess: () => {
-          toast.success(isEdit ? 'Master account updated' : 'Master account created')
+          toast.success(isEdit ? t('masterAccount.updated') : t('masterAccount.created'))
           onDone()
         },
         onError: (error) => {
@@ -55,8 +58,8 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{isEdit ? 'Edit master account' : 'Add master account'}</CardTitle>
-        <CardDescription>The source account whose bets are mirrored to sub-accounts.</CardDescription>
+        <CardTitle>{isEdit ? t('masterAccount.editTitle') : t('masterAccount.addTitle')}</CardTitle>
+        <CardDescription>{t('masterAccount.formDescription')}</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -66,7 +69,7 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>{t('accountForm.name')}</FormLabel>
                   <FormControl>
                     <Input autoComplete="off" {...field} />
                   </FormControl>
@@ -79,7 +82,7 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
               name="deviceId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Device</FormLabel>
+                  <FormLabel>{t('accountForm.device')}</FormLabel>
                   <FormControl>
                     <SelectField
                       value={field.value}
@@ -99,7 +102,7 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
               name="tokenUrl"
               render={({ field }) => (
                 <FormItem className="md:col-span-2">
-                  <FormLabel>Token URL</FormLabel>
+                  <FormLabel>{t('accountForm.tokenUrl')}</FormLabel>
                   <FormControl>
                     <Textarea
                       rows={3}
@@ -110,9 +113,7 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
                     />
                   </FormControl>
                   <FormDescription>
-                    {isEdit && !master?.tokenUrl
-                      ? 'No saved URL for this master account. Leave blank to keep the current token, or paste a new one.'
-                      : 'Paste the full URL from the emulator.'}
+                    {isEdit && !master?.tokenUrl ? t('masterAccount.tokenUrlHintNoSaved') : t('masterAccount.tokenUrlHint')}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -123,7 +124,7 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
               name="notes"
               render={({ field }) => (
                 <FormItem className="md:col-span-2">
-                  <FormLabel>Notes (optional)</FormLabel>
+                  <FormLabel>{t('proxyForm.notes')}</FormLabel>
                   <FormControl>
                     <Textarea rows={2} {...field} value={field.value ?? ''} />
                   </FormControl>
@@ -133,11 +134,11 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
             />
             <div className="flex justify-end gap-2 md:col-span-2">
               <Button type="button" variant="outline" onClick={onDone} disabled={mutation.isPending}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending && <Spinner />}
-                {isEdit ? 'Save changes' : 'Create master account'}
+                {isEdit ? t('proxyForm.saveChanges') : t('masterAccount.createMaster')}
               </Button>
             </div>
           </form>
@@ -148,6 +149,7 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
 }
 
 function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void }) {
+  const { t } = useTranslation()
   const status = useMasterStatus(true)
   const del = useDeleteMaster()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -163,32 +165,32 @@ function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void 
               {master.name} <StatusBadge status={master.status} />
             </CardTitle>
             <CardDescription>
-              UID {master.uid} · {master.deviceId === '1' ? 'iOS' : 'Android'}
+              {t('masterAccount.uidDevice', { uid: master.uid, device: master.deviceId === '1' ? 'iOS' : 'Android' })}
             </CardDescription>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onEdit}>
-              <Pencil /> Edit
+              <Pencil /> {t('common.edit')}
             </Button>
             <Button variant="destructive" onClick={() => setConfirmOpen(true)}>
-              <Trash2 /> Delete
+              <Trash2 /> {t('common.delete')}
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <dt className="text-sm text-muted-foreground">Listener</dt>
+              <dt className="text-sm text-muted-foreground">{t('masterAccount.listener')}</dt>
               <dd className="mt-1">
-                {status.isLoading ? <Skeleton className="h-6 w-20" /> : <Badge variant={running ? 'success' : 'secondary'}>{running ? 'Running' : 'Stopped'}</Badge>}
+                {status.isLoading ? <Skeleton className="h-6 w-20" /> : <Badge variant={running ? 'success' : 'secondary'}>{running ? t('masterAccount.running') : t('masterAccount.stopped')}</Badge>}
               </dd>
             </div>
             <div>
-              <dt className="text-sm text-muted-foreground">Last bet</dt>
+              <dt className="text-sm text-muted-foreground">{t('masterAccount.lastBet')}</dt>
               <dd className="mt-1 text-sm font-medium">{lastBetAt ? formatDistanceToNow(new Date(lastBetAt), { addSuffix: true }) : '—'}</dd>
             </div>
             <div>
-              <dt className="text-sm text-muted-foreground">Created</dt>
+              <dt className="text-sm text-muted-foreground">{t('masterAccount.createdLabel')}</dt>
               <dd className="mt-1 text-sm font-medium">{format(new Date(master.createdAt), 'PP')}</dd>
             </div>
           </dl>
@@ -196,32 +198,32 @@ function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void 
           {status.isError && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>Couldn’t load listener status: {getErrorMessage(status.error)}</AlertDescription>
+              <AlertDescription>{t('masterAccount.listenerStatusFailed', { error: getErrorMessage(status.error) })}</AlertDescription>
             </Alert>
           )}
           <Separator />
           <div className="flex flex-wrap items-center gap-2">
             <Button disabled>
-              <Play /> Start listener
+              <Play /> {t('masterAccount.startListener')}
             </Button>
             <Button variant="outline" disabled>
-              <Square /> Stop listener
+              <Square /> {t('masterAccount.stopListener')}
             </Button>
-            <span className="text-sm text-muted-foreground">Listener controls are coming in a later phase.</span>
+            <span className="text-sm text-muted-foreground">{t('masterAccount.listenerComingLater')}</span>
           </div>
         </CardContent>
       </Card>
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Delete master account?"
-        description="Sub-accounts will stop mirroring bets until a new master account is added."
-        confirmLabel="Delete"
+        title={t('masterAccount.deleteTitle')}
+        description={t('masterAccount.deleteDescription')}
+        confirmLabel={t('common.delete')}
         loading={del.isPending}
         onConfirm={() =>
           del.mutate(undefined, {
             onSuccess: () => {
-              toast.success('Master account deleted')
+              toast.success(t('masterAccount.deleted'))
               setConfirmOpen(false)
             },
             onError: (error) => toast.error(getErrorMessage(error)),
@@ -233,6 +235,7 @@ function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void 
 }
 
 export default function MasterAccount() {
+  const { t } = useTranslation()
   const { data: master, isLoading, isError, error } = useMasterAccount()
   const [editing, setEditing] = useState(false)
 
@@ -242,7 +245,7 @@ export default function MasterAccount() {
     body = (
       <Alert variant="destructive">
         <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>Couldn’t load master account</AlertTitle>
+        <AlertTitle>{t('masterAccount.couldNotLoad')}</AlertTitle>
         <AlertDescription>{getErrorMessage(error)}</AlertDescription>
       </Alert>
     )
@@ -251,11 +254,11 @@ export default function MasterAccount() {
     body = (
       <EmptyState
         icon={Radio}
-        title="No master account"
-        description="Add the master account that sub-accounts will mirror."
+        title={t('masterAccount.noneTitle')}
+        description={t('masterAccount.noneDescription')}
         action={
           <Button onClick={() => setEditing(true)}>
-            <Plus /> Add Master Account
+            <Plus /> {t('masterAccount.addTitle')}
           </Button>
         }
       />
@@ -264,7 +267,7 @@ export default function MasterAccount() {
 
   return (
     <>
-      <PageHeader title="Master Account" description="The source account whose bets are captured and mirrored." />
+      <PageHeader title={t('masterAccount.pageTitle')} description={t('masterAccount.pageDescription')} />
       {body}
     </>
   )

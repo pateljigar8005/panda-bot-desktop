@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, ArrowLeft, PauseCircle, Pencil, Play, Power, P
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { HeartbeatErrorsButton, HeartbeatLogPanel } from '@/components/shared/HeartbeatLogDialog'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -35,19 +36,23 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** sid / mc come from the platform lookup; without them the account can't heartbeat. */
-const Missing = () => <span className="text-destructive">Not set — update the token URL</span>
+function Missing() {
+  const { t } = useTranslation()
+  return <span className="text-destructive">{t('accountDetail.notSet')}</span>
+}
 
 const when = (iso?: string) => <RelativeTime iso={iso} showExact />
 
 /** Put on hold automatically after too many failed heartbeats: why, when, and the way out. */
 function OnHoldAlert({ account, onResume, resuming, onViewLog }: { account: Account; onResume: () => void; resuming: boolean; onViewLog: () => void }) {
+  const { t } = useTranslation()
   return (
     <Alert className="border-warning/50 [&>svg]:text-warning">
       <PauseCircle className="h-4 w-4" />
-      <AlertTitle>On hold — no requests are being sent</AlertTitle>
+      <AlertTitle>{t('accountDetail.onHoldTitle')}</AlertTitle>
       <AlertDescription className="space-y-3">
         <p>
-          {account.holdReason ?? 'Paused automatically after too many failed heartbeats in a row.'}
+          {account.holdReason ?? t('accountDetail.onHoldDefaultReason')}
           {account.heldAt && (
             <>
               {' '}
@@ -57,13 +62,13 @@ function OnHoldAlert({ account, onResume, resuming, onViewLog }: { account: Acco
             </>
           )}
         </p>
-        <p className="text-muted-foreground">Check the activity log for the cause, fix it (e.g. a dead proxy or expired token), then resume.</p>
+        <p className="text-muted-foreground">{t('accountDetail.onHoldHint')}</p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={onResume} disabled={resuming}>
-            {resuming ? <Spinner /> : <Play />} Resume
+            {resuming ? <Spinner /> : <Play />} {t('killSwitch.resume')}
           </Button>
           <Button size="sm" variant="outline" onClick={onViewLog}>
-            <ScrollText /> View log
+            <ScrollText /> {t('setupIssue.viewLog')}
           </Button>
         </div>
       </AlertDescription>
@@ -72,6 +77,7 @@ function OnHoldAlert({ account, onResume, resuming, onViewLog }: { account: Acco
 }
 
 export default function AccountDetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: account, isLoading, isError, error } = useAccount(id)
@@ -95,12 +101,12 @@ export default function AccountDetail() {
       <div className="space-y-4">
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Couldn’t load account</AlertTitle>
+          <AlertTitle>{t('accountForm.couldNotLoad')}</AlertTitle>
           <AlertDescription>{getErrorMessage(error)}</AlertDescription>
         </Alert>
         <Button variant="outline" asChild>
           <Link to="/accounts">
-            <ArrowLeft /> Back to accounts
+            <ArrowLeft /> {t('accountDetail.backToAccounts')}
           </Link>
         </Button>
       </div>
@@ -111,30 +117,30 @@ export default function AccountDetail() {
     <>
       <PageHeader
         title={account.name}
-        description={`UID ${account.uid} · ${deviceLabel(account.deviceId)}`}
+        description={t('accountDetail.uidDevice', { uid: account.uid, device: deviceLabel(account.deviceId) })}
         actions={
           <>
             <Button variant="outline" asChild>
               <Link to="/accounts">
-                <ArrowLeft /> Back
+                <ArrowLeft /> {t('common.back')}
               </Link>
             </Button>
             <Button variant="outline" onClick={() => actions.runTest(account)} disabled={actions.testing}>
-              {actions.testing ? <Spinner /> : <Wifi />} Test connection
+              {actions.testing ? <Spinner /> : <Wifi />} {t('accountDetail.testConnection')}
             </Button>
             {canToggle(account) && (
               <Button variant="outline" onClick={() => actions.toggleActive(account)} disabled={actions.toggling} title={toggleLabel(account)}>
                 {actions.toggling ? <Spinner /> : isOff(account) ? <Power /> : <PowerOff />}
-                {account.status === 'on_hold' ? 'Resume' : account.status === 'inactive' ? 'Activate' : 'Deactivate'}
+                {account.status === 'on_hold' ? t('killSwitch.resume') : account.status === 'inactive' ? t('accountDetail.activate') : t('accountDetail.deactivate')}
               </Button>
             )}
             <Button asChild>
               <Link to={`/accounts/${account._id}/edit`}>
-                <Pencil /> Edit
+                <Pencil /> {t('common.edit')}
               </Link>
             </Button>
             <Button variant="destructive" onClick={() => setConfirmOpen(true)}>
-              <Trash2 /> Delete
+              <Trash2 /> {t('common.delete')}
             </Button>
           </>
         }
@@ -144,12 +150,12 @@ export default function AccountDetail() {
       {account.status === 'expired' && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Token expired — no requests are being sent</AlertTitle>
+          <AlertTitle>{t('accountDetail.tokenExpiredTitle')}</AlertTitle>
           <AlertDescription className="space-y-3">
-            <p>The platform rejected this account’s token. Paste a fresh token URL from the emulator; the account starts again automatically once the platform accepts it.</p>
+            <p>{t('accountDetail.tokenExpiredDescription')}</p>
             <Button size="sm" variant="outline" asChild>
               <Link to={`/accounts/${account._id}/edit`}>
-                <Pencil /> Update token URL
+                <Pencil /> {t('setupIssue.updateTokenUrl')}
               </Link>
             </Button>
           </AlertDescription>
@@ -159,32 +165,32 @@ export default function AccountDetail() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="h-auto flex-wrap">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="bet-settings">Bet Settings</TabsTrigger>
-          <TabsTrigger value="credentials">Credentials</TabsTrigger>
-          <TabsTrigger value="activity">Activity Log</TabsTrigger>
+          <TabsTrigger value="overview">{t('accountDetail.tabOverview')}</TabsTrigger>
+          <TabsTrigger value="bet-settings">{t('accountDetail.tabBetSettings')}</TabsTrigger>
+          <TabsTrigger value="credentials">{t('accountDetail.tabCredentials')}</TabsTrigger>
+          <TabsTrigger value="activity">{t('accountDetail.tabActivity')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
           <Card>
             <CardContent className="pt-6">
               <dl className="divide-y">
-                <Row label="Status"><StatusBadge status={account.status} /></Row>
-                <Row label="Balance">{account.lastBalance.toFixed(2)}</Row>
-                <Row label="Last heartbeat">{when(account.lastHeartbeatAt)}</Row>
-                <Row label="Heartbeat errors">
+                <Row label={t('accounts.columnStatus')}><StatusBadge status={account.status} /></Row>
+                <Row label={t('accounts.columnBalance')}>{account.lastBalance.toFixed(2)}</Row>
+                <Row label={t('accounts.columnLastHeartbeat')}>{when(account.lastHeartbeatAt)}</Row>
+                <Row label={t('accountDetail.heartbeatErrors')}>
                   <span className="inline-flex items-center gap-2">
-                    {(account.consecutiveFailures ?? 0) > 0 && <span className="text-xs text-muted-foreground">{account.consecutiveFailures} in a row now</span>}
+                    {(account.consecutiveFailures ?? 0) > 0 && <span className="text-xs text-muted-foreground">{t('heartbeatLog.inARowNow', { count: account.consecutiveFailures })}</span>}
                     <HeartbeatErrorsButton account={account} />
                   </span>
                 </Row>
-                <Row label="Total bets placed">{account.totalBetsPlaced}</Row>
-                <Row label="Proxy">
-                  {!account.proxyId ? 'None' : proxy.data ? `${proxy.data.name} — ${proxy.data.host}:${proxy.data.port}` : account.proxyId}
+                <Row label={t('accountDetail.totalBetsPlaced')}>{account.totalBetsPlaced}</Row>
+                <Row label={t('accountDetail.proxy')}>
+                  {!account.proxyId ? t('common.none') : proxy.data ? `${proxy.data.name} — ${proxy.data.host}:${proxy.data.port}` : account.proxyId}
                 </Row>
-                <Row label="Created">{when(account.createdAt)}</Row>
-                <Row label="Updated">{when(account.updatedAt)}</Row>
-                <Row label="Notes">{account.notes || '—'}</Row>
+                <Row label={t('accountDetail.created')}>{when(account.createdAt)}</Row>
+                <Row label={t('accountDetail.updated')}>{when(account.updatedAt)}</Row>
+                <Row label={t('accountForm.notes')}>{account.notes || '—'}</Row>
               </dl>
             </CardContent>
           </Card>
@@ -193,19 +199,19 @@ export default function AccountDetail() {
         <TabsContent value="bet-settings">
           <Card>
             <CardHeader>
-              <CardTitle>Bet settings</CardTitle>
-              <CardDescription>Change these from the Edit form.</CardDescription>
+              <CardTitle>{t('accountForm.betSettings')}</CardTitle>
+              <CardDescription>{t('accountDetail.betSettingsDescription')}</CardDescription>
             </CardHeader>
             <CardContent>
               <dl className="divide-y">
-                <Row label="Bet mode"><span className="capitalize">{account.betMode}</span></Row>
+                <Row label={t('accountForm.betMode')}><span className="capitalize">{account.betMode}</span></Row>
                 {account.betMode === 'fixed' ? (
-                  <Row label="Fixed amount">{account.fixedAmount}</Row>
+                  <Row label={t('accountForm.fixedAmount')}>{account.fixedAmount}</Row>
                 ) : (
-                  <Row label="Multiplier">×{account.multiplier}</Row>
+                  <Row label={t('accountForm.multiplier')}>×{account.multiplier}</Row>
                 )}
-                <Row label="Max bet amount">{account.maxBetAmount}</Row>
-                <Row label="Min balance threshold">{account.minBalanceThreshold}</Row>
+                <Row label={t('accountForm.maxBetAmount')}>{account.maxBetAmount}</Row>
+                <Row label={t('accountForm.minBalanceThreshold')}>{account.minBalanceThreshold}</Row>
               </dl>
             </CardContent>
           </Card>
@@ -214,17 +220,17 @@ export default function AccountDetail() {
         <TabsContent value="credentials">
           <Card>
             <CardHeader>
-              <CardTitle>Credentials</CardTitle>
-              <CardDescription>Secrets are stored encrypted and never shown in the dashboard.</CardDescription>
+              <CardTitle>{t('accountDetail.credentials')}</CardTitle>
+              <CardDescription>{t('accountDetail.credentialsDescription')}</CardDescription>
             </CardHeader>
             <CardContent>
               <dl className="divide-y">
-                <Row label="Token URL">{MASK}</Row>
-                <Row label="Token">{MASK}</Row>
-                <Row label="Session ID">{MASK}</Row>
-                <Row label="SID">{account.sid ? MASK : <Missing />}</Row>
-                <Row label="MC">{account.mc ? MASK : <Missing />}</Row>
-                <Row label="M ID">{account.mId ?? '—'}</Row>
+                <Row label={t('accountForm.tokenUrl')}>{MASK}</Row>
+                <Row label={t('accountDetail.token')}>{MASK}</Row>
+                <Row label={t('accountDetail.sessionId')}>{MASK}</Row>
+                <Row label={t('accountDetail.sid')}>{account.sid ? MASK : <Missing />}</Row>
+                <Row label={t('accountDetail.mc')}>{account.mc ? MASK : <Missing />}</Row>
+                <Row label={t('accountDetail.mId')}>{account.mId ?? '—'}</Row>
               </dl>
             </CardContent>
           </Card>
@@ -234,7 +240,7 @@ export default function AccountDetail() {
           {/* No inner scroll here: the page scrolls, and paging keeps it to 10 entries */}
           <HeartbeatLogPanel account={account} enabled={tab === 'activity'} listClassName="max-h-none overflow-visible" />
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Activity className="h-3.5 w-3.5" /> Heartbeats and setup attempts are logged. Bets will appear here once bet placement is built.
+            <Activity className="h-3.5 w-3.5" /> {t('accountDetail.activityHint')}
           </p>
         </TabsContent>
       </Tabs>
@@ -242,9 +248,9 @@ export default function AccountDetail() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Delete account?"
-        description={`“${account.name}” will be permanently removed. This can't be undone.`}
-        confirmLabel="Delete"
+        title={t('accounts.deleteTitle')}
+        description={t('accounts.deleteDescription', { name: account.name })}
+        confirmLabel={t('common.delete')}
         loading={actions.deleting}
         onConfirm={() => actions.remove(account, () => navigate('/accounts', { replace: true }))}
       />

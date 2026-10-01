@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { BetSizingPreview } from '@/components/shared/BetSizingPreview'
 import { NumberInput } from '@/components/shared/NumberInput'
@@ -51,20 +52,21 @@ const toFormValues = (a: Account): AccountFormValues => ({
 
 /** Create (/accounts/new) and edit (/accounts/:id/edit) share this page. */
 export default function AccountFormPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const isEdit = !!id
   const account = useAccount(id)
 
-  const title = isEdit ? `Edit ${account.data?.name ?? 'account'}` : 'Add account'
+  const title = isEdit ? t('accountForm.editTitle', { name: account.data?.name ?? t('accountForm.account') }) : t('accountForm.addTitle')
   return (
     <>
       <PageHeader
         title={title}
-        description={isEdit ? 'Update credentials, bet settings and proxy.' : 'Register a new sub-account.'}
+        description={isEdit ? t('accountForm.editDescription') : t('accountForm.addDescription')}
         actions={
           <Button variant="outline" asChild>
             <Link to={isEdit ? `/accounts/${id}` : '/accounts'}>
-              <ArrowLeft /> Back
+              <ArrowLeft /> {t('common.back')}
             </Link>
           </Button>
         }
@@ -77,7 +79,7 @@ export default function AccountFormPage() {
       ) : isEdit && account.isError ? (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Couldn’t load account</AlertTitle>
+          <AlertTitle>{t('accountForm.couldNotLoad')}</AlertTitle>
           <AlertDescription>{getErrorMessage(account.error)}</AlertDescription>
         </Alert>
       ) : (
@@ -88,6 +90,7 @@ export default function AccountFormPage() {
 }
 
 function AccountFormBody({ account }: { account?: Account }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const isEdit = !!account
   const create = useCreateAccount()
@@ -96,7 +99,7 @@ function AccountFormBody({ account }: { account?: Account }) {
   const proxies = useProxies({ limit: 100 })
 
   const form = useForm<AccountFormValues>({
-    resolver: zodResolver(accountSchema(isEdit)),
+    resolver: zodResolver(accountSchema(isEdit, t)),
     defaultValues: account ? toFormValues(account) : emptyValues,
   })
   const betMode = form.watch('betMode')
@@ -121,14 +124,14 @@ function AccountFormBody({ account }: { account?: Account }) {
       onSuccess: (saved) => {
         if (!saved.sid || !saved.mc) {
           // Saved, but the platform lookup failed: show the platform's reply and open the account's log
-          toast.error(`${isEdit ? 'Account updated' : 'Account saved'}, but setup failed — heartbeats can't start`, {
-            description: saved.setupError || 'Session details (sid/mc) could not be fetched from the platform.',
+          toast.error(isEdit ? t('accountForm.updatedSetupFailed') : t('accountForm.savedSetupFailed'), {
+            description: saved.setupError || t('setupIssue.reasonFallback'),
             duration: 15_000,
           })
           navigate(`/accounts/${saved._id}?tab=activity`)
           return
         }
-        toast.success(isEdit ? 'Account updated' : 'Account created')
+        toast.success(isEdit ? t('accountForm.updated') : t('accountForm.created'))
         navigate(isEdit ? `/accounts/${account._id}` : '/accounts')
       },
       onError: (error) => {
@@ -144,8 +147,8 @@ function AccountFormBody({ account }: { account?: Account }) {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate>
         <Card>
           <CardHeader>
-            <CardTitle>Account</CardTitle>
-            <CardDescription>How this account is identified and authenticated.</CardDescription>
+            <CardTitle>{t('accountForm.accountCard')}</CardTitle>
+            <CardDescription>{t('accountForm.accountCardDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <FormField
@@ -153,7 +156,7 @@ function AccountFormBody({ account }: { account?: Account }) {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>{t('accountForm.name')}</FormLabel>
                   <FormControl>
                     <Input autoComplete="off" placeholder="e.g. acct_alpha" {...field} />
                   </FormControl>
@@ -166,7 +169,7 @@ function AccountFormBody({ account }: { account?: Account }) {
               name="deviceId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Device</FormLabel>
+                  <FormLabel>{t('accountForm.device')}</FormLabel>
                   <FormControl>
                     <SelectField
                       value={field.value}
@@ -186,7 +189,7 @@ function AccountFormBody({ account }: { account?: Account }) {
               name="tokenUrl"
               render={({ field }) => (
                 <FormItem className="md:col-span-2">
-                  <FormLabel>Token URL</FormLabel>
+                  <FormLabel>{t('accountForm.tokenUrl')}</FormLabel>
                   <FormControl>
                     <Textarea
                       rows={3}
@@ -197,9 +200,7 @@ function AccountFormBody({ account }: { account?: Account }) {
                     />
                   </FormControl>
                   <FormDescription>
-                    {isEdit && !account.tokenUrl
-                      ? 'No saved URL for this account. Leave blank to keep the current token, or paste a new one.'
-                      : 'Paste the full URL from the emulator. Changing it re-fetches the account credentials.'}
+                    {isEdit && !account.tokenUrl ? t('accountForm.tokenUrlHintNoSaved') : t('accountForm.tokenUrlHint')}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -210,17 +211,17 @@ function AccountFormBody({ account }: { account?: Account }) {
               name="proxyId"
               render={({ field }) => (
                 <FormItem className="md:col-span-2">
-                  <FormLabel>Proxy (optional)</FormLabel>
+                  <FormLabel>{t('accountForm.proxy')}</FormLabel>
                   <FormControl>
                     <SelectField
                       value={field.value ?? ''}
                       onChange={field.onChange}
                       options={(proxies.data?.proxies ?? []).map((p) => ({ value: p._id, label: `${p.name} — ${p.host}:${p.port} (${p.status})` }))}
-                      emptyLabel="No proxy"
+                      emptyLabel={t('accountForm.noProxy')}
                       disabled={proxies.isLoading}
                     />
                   </FormControl>
-                  {proxies.isError && <FormDescription>Couldn’t load proxies; you can assign one later.</FormDescription>}
+                  {proxies.isError && <FormDescription>{t('accountForm.proxiesLoadFailed')}</FormDescription>}
                   <FormMessage />
                 </FormItem>
               )}
@@ -230,8 +231,8 @@ function AccountFormBody({ account }: { account?: Account }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Bet settings</CardTitle>
-            <CardDescription>How bets are sized when mirroring the master account.</CardDescription>
+            <CardTitle>{t('accountForm.betSettings')}</CardTitle>
+            <CardDescription>{t('accountForm.betSettingsDescription')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <FormField
@@ -239,13 +240,13 @@ function AccountFormBody({ account }: { account?: Account }) {
               name="betMode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Bet mode</FormLabel>
+                  <FormLabel>{t('accountForm.betMode')}</FormLabel>
                   <FormControl>
                     <RadioGroup value={field.value} onValueChange={field.onChange} className="grid gap-3 sm:grid-cols-2">
                       {(
                         [
-                          ['fixed', 'Fixed', 'Always bet the same amount.'],
-                          ['proportional', 'Proportional', 'Master stake × multiplier.'],
+                          ['fixed', t('accounts.betModeFixed'), t('accountForm.betModeFixedHint')],
+                          ['proportional', t('accounts.betModeProportional'), t('accountForm.betModeProportionalHint')],
                         ] as const
                       ).map(([value, label, hint]) => (
                         <label
@@ -276,11 +277,11 @@ function AccountFormBody({ account }: { account?: Account }) {
                   name="fixedAmount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Fixed amount</FormLabel>
+                      <FormLabel>{t('accountForm.fixedAmount')}</FormLabel>
                       <FormControl>
                         <NumberInput step="any" {...field} />
                       </FormControl>
-                      <FormDescription>Stake for every bet, e.g. 20 = always bet 20.</FormDescription>
+                      <FormDescription>{t('accountForm.fixedAmountHint')}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -291,11 +292,11 @@ function AccountFormBody({ account }: { account?: Account }) {
                   name="multiplier"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Multiplier</FormLabel>
+                      <FormLabel>{t('accountForm.multiplier')}</FormLabel>
                       <FormControl>
                         <NumberInput step="any" {...field} />
                       </FormControl>
-                      <FormDescription>1 = same as master, 0.5 = half, 2 = double.</FormDescription>
+                      <FormDescription>{t('accountForm.multiplierHint')}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -306,11 +307,11 @@ function AccountFormBody({ account }: { account?: Account }) {
                 name="maxBetAmount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max bet amount</FormLabel>
+                    <FormLabel>{t('accountForm.maxBetAmount')}</FormLabel>
                     <FormControl>
                       <NumberInput step="any" {...field} />
                     </FormControl>
-                    <FormDescription>Upper limit per bet; bigger stakes are reduced to this.</FormDescription>
+                    <FormDescription>{t('accountForm.maxBetAmountHint')}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -320,11 +321,11 @@ function AccountFormBody({ account }: { account?: Account }) {
                 name="minBalanceThreshold"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Min balance threshold</FormLabel>
+                    <FormLabel>{t('accountForm.minBalanceThreshold')}</FormLabel>
                     <FormControl>
                       <NumberInput step="any" {...field} />
                     </FormControl>
-                    <FormDescription>Bets are skipped while the balance is below this.</FormDescription>
+                    <FormDescription>{t('accountForm.minBalanceThresholdHint')}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -343,7 +344,7 @@ function AccountFormBody({ account }: { account?: Account }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Notes</CardTitle>
+            <CardTitle>{t('accountForm.notes')}</CardTitle>
           </CardHeader>
           <CardContent>
             <FormField
@@ -352,7 +353,7 @@ function AccountFormBody({ account }: { account?: Account }) {
               render={({ field }) => (
                 <FormItem>
                   <FormControl>
-                    <Textarea rows={3} placeholder="Optional" {...field} value={field.value ?? ''} />
+                    <Textarea rows={3} placeholder={t('accountForm.notesPlaceholder')} {...field} value={field.value ?? ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -363,11 +364,11 @@ function AccountFormBody({ account }: { account?: Account }) {
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" asChild>
-            <Link to={isEdit ? `/accounts/${account._id}` : '/accounts'}>Cancel</Link>
+            <Link to={isEdit ? `/accounts/${account._id}` : '/accounts'}>{t('common.cancel')}</Link>
           </Button>
           <Button type="submit" disabled={mutation.isPending}>
             {mutation.isPending && <Spinner />}
-            {isEdit ? 'Save changes' : 'Create account'}
+            {isEdit ? t('accountForm.saveChanges') : t('accountForm.createAccount')}
           </Button>
         </div>
       </form>

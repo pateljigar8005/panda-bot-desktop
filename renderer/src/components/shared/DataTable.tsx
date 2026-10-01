@@ -15,6 +15,7 @@ import {
 } from '@tanstack/react-table'
 import { endOfDay, startOfDay } from 'date-fns'
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -88,7 +89,7 @@ export function DataTable<TData>({
   columns,
   data,
   loading,
-  emptyMessage = 'No results.',
+  emptyMessage,
   toolbar = true,
   pagination = true,
   pageSize = 10,
@@ -96,6 +97,7 @@ export function DataTable<TData>({
   toolbarLeft,
   serverPagination,
 }: DataTableProps<TData>) {
+  const { t } = useTranslation()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -165,8 +167,8 @@ export function DataTable<TData>({
               <Input
                 value={globalFilter}
                 onChange={(e) => setGlobalFilter(e.target.value)}
-                placeholder="Search…"
-                aria-label="Search"
+                placeholder={t('dataTable.searchPlaceholder')}
+                aria-label={t('common.search')}
                 className="pl-9"
               />
             </div>
@@ -177,13 +179,13 @@ export function DataTable<TData>({
                 onClick={() => setShowFilters(true)}
                 aria-haspopup="dialog"
               >
-                <SlidersHorizontal /> Filters
+                <SlidersHorizontal /> {t('common.filters')}
                 {activeCount > 0 && <Badge className="ml-1 px-1.5 py-0">{activeCount}</Badge>}
               </Button>
             )}
             {isFiltered && (
               <Button variant="ghost" onClick={clearAll}>
-                <X /> Clear
+                <X /> {t('common.clear')}
               </Button>
             )}
           </div>
@@ -192,8 +194,8 @@ export function DataTable<TData>({
             <Dialog open={showFilters} onOpenChange={setShowFilters}>
               <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle>Advanced search</DialogTitle>
-                  <DialogDescription>Results update as you type. Filters apply to the rows loaded in the table.</DialogDescription>
+                  <DialogTitle>{t('dataTable.advancedSearch')}</DialogTitle>
+                  <DialogDescription>{t('dataTable.advancedSearchDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-2 sm:grid-cols-2">
                   {filterable.map((column) => (
@@ -202,11 +204,10 @@ export function DataTable<TData>({
                 </div>
                 <DialogFooter className="gap-2 sm:gap-0">
                   <Button variant="outline" onClick={() => setColumnFilters([])} disabled={activeCount === 0}>
-                    Clear filters
+                    {t('dataTable.clearFilters')}
                   </Button>
                   <Button onClick={() => setShowFilters(false)}>
-                    Show {matchCount} result{matchCount === 1 ? '' : 's'}
-                    {serverPagination && isFiltered && ' on this page'}
+                    {serverPagination && isFiltered ? t('dataTable.showResultsOnPage', { count: matchCount }) : t('dataTable.showResults', { count: matchCount })}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -269,7 +270,7 @@ export function DataTable<TData>({
             ) : (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  {isFiltered ? 'No results match your search or filters.' : emptyMessage}
+                  {isFiltered ? t('dataTable.noResultsFiltered') : (emptyMessage ?? t('dataTable.noResults'))}
                 </TableCell>
               </TableRow>
             )}
@@ -280,35 +281,30 @@ export function DataTable<TData>({
       {pagination && !loading && filteredTotal > 0 && (
         <div className="flex flex-col items-center justify-between gap-3 text-sm text-muted-foreground sm:flex-row">
           <span>
-            {serverPagination && isFiltered ? (
-              <>
-                {pageMatches} of {data.length} on this page match · {filteredTotal} total
-              </>
-            ) : (
-              <>
-                Showing {from}–{to} of {filteredTotal}
-                {isFiltered && ` (filtered from ${data.length})`}
-              </>
-            )}
+            {serverPagination && isFiltered
+              ? t('dataTable.pageMatches', { pageMatches, pageTotal: data.length, filteredTotal })
+              : isFiltered
+                ? t('dataTable.showingFiltered', { from, to, filteredTotal, dataTotal: data.length })
+                : t('dataTable.showing', { from, to, filteredTotal })}
           </span>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2">
-              Rows
+              {t('dataTable.rows')}
               <SelectField
                 value={String(size)}
                 onChange={(v) => setSize(Number(v))}
                 options={[10, 25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))}
                 className="h-9 w-20"
-                aria-label="Rows per page"
+                aria-label={t('dataTable.rowsPerPage')}
               />
             </label>
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={goPrev} disabled={!canPrev} aria-label="Previous page">
+            <Button variant="outline" size="icon" className="h-9 w-9" onClick={goPrev} disabled={!canPrev} aria-label={t('dataTable.previousPage')}>
               <ChevronLeft />
             </Button>
             <span className="min-w-[5rem] text-center">
-              Page {pageIndex + 1} of {pageCount}
+              {t('dataTable.pageOf', { page: pageIndex + 1, pages: pageCount })}
             </span>
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={goNext} disabled={!canNext} aria-label="Next page">
+            <Button variant="outline" size="icon" className="h-9 w-9" onClick={goNext} disabled={!canNext} aria-label={t('dataTable.nextPage')}>
               <ChevronRight />
             </Button>
           </div>
@@ -319,6 +315,7 @@ export function DataTable<TData>({
 }
 
 function ColumnFilter<TData>({ column, data }: { column: Column<TData, unknown>; data: TData[] }) {
+  const { t } = useTranslation()
   const type = column.columnDef.meta?.filter
   const label = typeof column.columnDef.header === 'string' ? column.columnDef.header : column.id
   const id = `filter-${column.id}`
@@ -347,7 +344,7 @@ function ColumnFilter<TData>({ column, data }: { column: Column<TData, unknown>;
         {label}
       </label>
       {type === 'text' && (
-        <Input id={id} value={(value as string) ?? ''} onChange={(e) => column.setFilterValue(e.target.value || undefined)} placeholder={`Filter ${label.toLowerCase()}…`} className="h-9" />
+        <Input id={id} value={(value as string) ?? ''} onChange={(e) => column.setFilterValue(e.target.value || undefined)} placeholder={t('dataTable.filterLabel', { label: label.toLowerCase() })} className="h-9" />
       )}
       {type === 'select' && (
         <SelectField
@@ -355,20 +352,20 @@ function ColumnFilter<TData>({ column, data }: { column: Column<TData, unknown>;
           value={(value as string) ?? ''}
           onChange={(v) => column.setFilterValue(v || undefined)}
           options={options}
-          emptyLabel="All"
+          emptyLabel={t('common.all')}
           className="h-9"
         />
       )}
       {type === 'number' && (
         <div className="flex items-center gap-2">
-          <Input id={id} type="number" inputMode="decimal" value={range[0]} onChange={(e) => setRange(0, e.target.value)} placeholder="Min" aria-label={`${label} minimum`} className={numberClass} />
-          <Input type="number" inputMode="decimal" value={range[1]} onChange={(e) => setRange(1, e.target.value)} placeholder="Max" aria-label={`${label} maximum`} className={numberClass} />
+          <Input id={id} type="number" inputMode="decimal" value={range[0]} onChange={(e) => setRange(0, e.target.value)} placeholder={t('dataTable.min')} aria-label={t('dataTable.labelMinimum', { label })} className={numberClass} />
+          <Input type="number" inputMode="decimal" value={range[1]} onChange={(e) => setRange(1, e.target.value)} placeholder={t('dataTable.max')} aria-label={t('dataTable.labelMaximum', { label })} className={numberClass} />
         </div>
       )}
       {type === 'date' && (
         <div className="flex items-center gap-2">
-          <DatePicker value={range[0]} max={range[1] || undefined} onChange={(v) => setRange(0, v)} placeholder="From" aria-label={`${label} from`} />
-          <DatePicker value={range[1]} min={range[0] || undefined} onChange={(v) => setRange(1, v)} placeholder="To" aria-label={`${label} to`} />
+          <DatePicker value={range[0]} max={range[1] || undefined} onChange={(v) => setRange(0, v)} placeholder={t('dataTable.from')} aria-label={t('dataTable.labelFrom', { label })} />
+          <DatePicker value={range[1]} min={range[0] || undefined} onChange={(v) => setRange(1, v)} placeholder={t('dataTable.to')} aria-label={t('dataTable.labelTo', { label })} />
         </div>
       )}
     </div>

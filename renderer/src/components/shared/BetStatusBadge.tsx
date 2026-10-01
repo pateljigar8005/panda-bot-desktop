@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import type { BetStatus } from '@/types'
 
@@ -9,5 +10,6 @@ const variant: Record<BetStatus, 'success' | 'destructive' | 'warning' | 'second
 }
 
 export function BetStatusBadge({ status }: { status: BetStatus }) {
-  return <Badge variant={variant[status]} className="capitalize">{status}</Badge>
+  const { t } = useTranslation()
+  return <Badge variant={variant[status]} className="capitalize">{t(`betStatus.${status}`, status)}</Badge>
 }

@@ -10,8 +10,19 @@ export type PandaResponse<T = unknown> =
   | { ok: true; status: number; data: T }
   | { ok: false; status: number; message: string; details?: unknown }
 
+/** Envelope for a live event pushed from the main process (src/main/services/events.js). */
+export interface PandaEventEnvelope {
+  name: string
+  payload: unknown
+  at: number
+}
+
 declare global {
   interface Window {
-    panda: { request: <T = unknown>(request: PandaRequest) => Promise<PandaResponse<T>> }
+    panda: {
+      request: <T = unknown>(request: PandaRequest) => Promise<PandaResponse<T>>
+      /** Subscribe to live events. Returns an unsubscribe function. */
+      onEvent: (callback: (envelope: PandaEventEnvelope) => void) => () => void
+    }
   }
 }

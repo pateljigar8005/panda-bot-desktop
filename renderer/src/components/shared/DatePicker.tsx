@@ -1,6 +1,7 @@
 import { format, isValid, parse } from 'date-fns'
 import { CalendarIcon, X } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -24,7 +25,8 @@ interface DatePickerProps {
   className?: string
 }
 
-export function DatePicker({ value, onChange, placeholder = 'Pick a date', min, max, className, ...rest }: DatePickerProps) {
+export function DatePicker({ value, onChange, placeholder, min, max, className, ...rest }: DatePickerProps) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const selected = toDate(value)
   const minDate = toDate(min)
@@ -40,12 +42,12 @@ export function DatePicker({ value, onChange, placeholder = 'Pick a date', min, 
           className={cn('h-9 w-full justify-start px-3 font-normal', !selected && 'text-muted-foreground', className)}
         >
           <CalendarIcon className="opacity-60" />
-          <span className="flex-1 truncate text-left">{selected ? format(selected, 'PP') : placeholder}</span>
+          <span className="flex-1 truncate text-left">{selected ? format(selected, 'PP') : (placeholder ?? t('datePicker.pickADate'))}</span>
           {selected && (
             <span
               role="button"
               tabIndex={0}
-              aria-label="Clear date"
+              aria-label={t('datePicker.clearDate')}
               className="rounded p-0.5 opacity-60 hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation()

@@ -1,5 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { useLanguageEffect } from '@/hooks/useLanguage'
+import { useRealtimeBridge } from '@/hooks/useRealtimeBridge'
 import { useThemeEffect } from '@/hooks/useTheme'
 import AccountDetail from '@/pages/dashboard/AccountDetail'
 import AccountForm from '@/pages/dashboard/AccountForm'
@@ -16,6 +18,8 @@ import NotFound from '@/pages/NotFound'
 
 export default function App() {
   useThemeEffect()
+  useLanguageEffect()
+  useRealtimeBridge()
 
   // No login: the app runs locally for its owner and opens straight to the dashboard
   return (

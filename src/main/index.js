@@ -8,6 +8,7 @@ const encryptionService = require('./services/encryptionService');
 const systemSettings = require('./services/systemSettingsService');
 const killSwitch = require('./services/killSwitchService');
 const heartbeatScheduler = require('./services/heartbeatScheduler');
+const events = require('./services/events');
 const logger = require('./logger');
 
 const DB_FILE = 'panda.db';
@@ -94,6 +95,11 @@ if (!app.requestSingleInstanceLock()) {
         registerAppProtocol();
         registerIpc({ devUrl: DEV_URL });
         createMainWindow();
+
+        // Live events (heartbeats, kill switch, …) pushed straight to the window — no polling needed
+        events.bus.on('event', (envelope) => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('panda:event', envelope);
+        });
 
         heartbeatScheduler.startAll().catch((err) => logger.error('Failed to start heartbeat loops', err.message));
 

@@ -2,6 +2,8 @@ import { endOfDay, startOfDay } from 'date-fns'
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { IconAction } from '@/components/shared/IconAction'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -24,37 +26,35 @@ import type { AuditLog as AuditEntry, AuditSortField } from '@/types'
 const PAGE_SIZE = 20
 
 /** Readable names for audit actions; unknown ones are humanised. */
-const ACTION_LABELS: Record<string, string> = {
-  account_created: 'Created account',
-  account_updated: 'Updated account',
-  account_deleted: 'Deleted account',
-  account_proxy_assigned: 'Changed account proxy',
-  account_deactivated: 'Deactivated account',
-  account_activated: 'Activated account',
-  account_connection_tested: 'Tested account connection',
-  account_setup_retried: 'Retried account setup',
-  heartbeat_logs_cleared: 'Cleared heartbeat log',
-  account_auto_held: 'Put on hold automatically',
-  proxy_created: 'Created proxy',
-  proxy_updated: 'Updated proxy',
-  proxy_deleted: 'Deleted proxy',
-  proxy_health_checked: 'Checked proxy health',
-  master_created: 'Created master account',
-  master_updated: 'Updated master account',
-  master_deleted: 'Deleted master account',
-  notification_settings_updated: 'Updated notification settings',
-  notification_test_sent: 'Sent test email',
+const ACTION_KEYS: Record<string, string> = {
+  account_created: 'auditLog.actionAccountCreated',
+  account_updated: 'auditLog.actionAccountUpdated',
+  account_deleted: 'auditLog.actionAccountDeleted',
+  account_proxy_assigned: 'auditLog.actionAccountProxyAssigned',
+  account_deactivated: 'auditLog.actionAccountDeactivated',
+  account_activated: 'auditLog.actionAccountActivated',
+  account_connection_tested: 'auditLog.actionAccountConnectionTested',
+  account_setup_retried: 'auditLog.actionAccountSetupRetried',
+  heartbeat_logs_cleared: 'auditLog.actionHeartbeatLogsCleared',
+  activity_log_cleared: 'auditLog.actionActivityLogCleared',
+  account_auto_held: 'auditLog.actionAccountAutoHeld',
+  proxy_created: 'auditLog.actionProxyCreated',
+  proxy_updated: 'auditLog.actionProxyUpdated',
+  proxy_deleted: 'auditLog.actionProxyDeleted',
+  proxy_health_checked: 'auditLog.actionProxyHealthChecked',
+  master_created: 'auditLog.actionMasterCreated',
+  master_updated: 'auditLog.actionMasterUpdated',
+  master_deleted: 'auditLog.actionMasterDeleted',
+  notification_settings_updated: 'auditLog.actionNotificationSettingsUpdated',
+  notification_test_sent: 'auditLog.actionNotificationTestSent',
+  system_settings_updated: 'auditLog.actionSystemSettingsUpdated',
+  kill_switch_activated: 'auditLog.actionKillSwitchActivated',
+  kill_switch_released: 'auditLog.actionKillSwitchReleased',
 }
 /** One local owner: an entry is either theirs or the app's own (automatic). */
-const actor = (entry: AuditEntry) => (entry.meta?.automatic ? 'System (automatic)' : 'You')
+const actor = (entry: AuditEntry, t: TFunction) => (entry.meta?.automatic ? t('auditLog.systemAutomatic') : t('auditLog.you'))
 
-const actionLabel = (action: string) => ACTION_LABELS[action] ?? action.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
-
-const RESULTS = [
-  { value: 'all', label: 'All results' },
-  { value: 'success', label: 'Succeeded' },
-  { value: 'failed', label: 'Failed' },
-]
+const actionLabel = (action: string, t: TFunction) => (ACTION_KEYS[action] ? t(ACTION_KEYS[action]) : action.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()))
 
 // ---------- Sorting ----------
 type Sort = { field: AuditSortField; order: 'asc' | 'desc' }
@@ -82,7 +82,7 @@ function SortHeader({ field, sort, onSort, children }: { field: AuditSortField; 
 // ---------- Advanced search ----------
 type Advanced = { resourceType: string; resourceName: string; ip: string; method: string; statusCode: string; message: string }
 const EMPTY_ADVANCED: Advanced = { resourceType: '', resourceName: '', ip: '', method: '', statusCode: '', message: '' }
-const RESOURCE_TYPES = ['account', 'proxy', 'master', 'settings', 'system'].map((v) => ({ value: v, label: v.charAt(0).toUpperCase() + v.slice(1) }))
+const RESOURCE_TYPE_VALUES = ['account', 'proxy', 'master', 'settings', 'system']
 const METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'].map((v) => ({ value: v, label: v }))
 
 function AdvancedSearch({
@@ -98,6 +98,8 @@ function AdvancedSearch({
   onChange: (next: Advanced) => void
   total?: number
 }) {
+  const { t } = useTranslation()
+  const RESOURCE_TYPES = RESOURCE_TYPE_VALUES.map((v) => ({ value: v, label: t(`status.${v}`, v).replace(/^./, (c) => c.toUpperCase()) }))
   const set = (key: keyof Advanced) => (v: string) => onChange({ ...value, [key]: v })
   const text = (key: keyof Advanced, label: string, placeholder: string, inputMode?: 'numeric') => (
     <div className="space-y-1.5">
@@ -109,28 +111,28 @@ function AdvancedSearch({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Advanced search</DialogTitle>
-          <DialogDescription>Results update as you type and search the whole history, not just this page.</DialogDescription>
+          <DialogTitle>{t('dataTable.advancedSearch')}</DialogTitle>
+          <DialogDescription>{t('auditLog.advancedSearchDescription')}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Resource type</Label>
-            <SelectField value={value.resourceType} onChange={set('resourceType')} options={RESOURCE_TYPES} emptyLabel="Any type" aria-label="Resource type" />
+            <Label>{t('auditLog.resourceType')}</Label>
+            <SelectField value={value.resourceType} onChange={set('resourceType')} options={RESOURCE_TYPES} emptyLabel={t('auditLog.anyType')} aria-label={t('auditLog.resourceType')} />
           </div>
-          {text('resourceName', 'Resource name contains', 'e.g. SUB ACC 1')}
+          {text('resourceName', t('auditLog.resourceNameContains'), 'e.g. SUB ACC 1')}
           <div className="space-y-1.5">
-            <Label>HTTP method</Label>
-            <SelectField value={value.method} onChange={set('method')} options={METHODS} emptyLabel="Any method" aria-label="HTTP method" />
+            <Label>{t('auditLog.httpMethod')}</Label>
+            <SelectField value={value.method} onChange={set('method')} options={METHODS} emptyLabel={t('auditLog.anyMethod')} aria-label={t('auditLog.httpMethod')} />
           </div>
-          {text('statusCode', 'Status code', 'e.g. 400', 'numeric')}
-          {text('ip', 'IP address contains', 'e.g. 192.168.')}
-          {text('message', 'Error message contains', 'e.g. invalid')}
+          {text('statusCode', t('auditLog.statusCode'), 'e.g. 400', 'numeric')}
+          {text('ip', t('auditLog.ipContains'), 'e.g. 192.168.')}
+          {text('message', t('auditLog.messageContains'), 'e.g. invalid')}
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onChange(EMPTY_ADVANCED)} disabled={!Object.values(value).some(Boolean)}>
-            Clear filters
+            {t('dataTable.clearFilters')}
           </Button>
-          <Button onClick={() => onOpenChange(false)}>{total === undefined ? 'Done' : `Show ${total.toLocaleString()} result${total === 1 ? '' : 's'}`}</Button>
+          <Button onClick={() => onOpenChange(false)}>{total === undefined ? t('auditLog.done') : t('dataTable.showResults', { count: total })}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -147,13 +149,14 @@ function resourceHref(e: AuditEntry) {
 }
 
 function ResultBadge({ entry }: { entry: AuditEntry }) {
+  const { t } = useTranslation()
   return (
     <Badge
       variant="outline"
       title={entry.message ?? undefined}
       className={cn('whitespace-nowrap tabular-nums', entry.success ? 'border-success/40 text-success' : 'border-destructive/50 text-destructive')}
     >
-      {entry.success ? 'OK' : 'Failed'} {entry.statusCode ?? ''}
+      {entry.success ? t('auditLog.ok') : t('heartbeatLog.statusFilter.failed')} {entry.statusCode ?? ''}
     </Badge>
   )
 }
@@ -177,6 +180,7 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
 }
 
 function EntryDetails({ entry, onClose }: { entry: AuditEntry | null; onClose: () => void }) {
+  const { t } = useTranslation()
   const hasRequest = !!entry?.request && typeof entry.request === 'object' && Object.keys(entry.request as object).length > 0
   const hasMeta = !!entry && Object.keys(entry.meta ?? {}).length > 0
   return (
@@ -185,33 +189,33 @@ function EntryDetails({ entry, onClose }: { entry: AuditEntry | null; onClose: (
         {entry && (
           <>
             <DialogHeader>
-              <DialogTitle>{actionLabel(entry.action)}</DialogTitle>
+              <DialogTitle>{actionLabel(entry.action, t)}</DialogTitle>
               <DialogDescription>{formatExact(entry.createdAt)}</DialogDescription>
             </DialogHeader>
             <dl className="divide-y">
-              <Detail label="By">{actor(entry)}</Detail>
-              <Detail label="Result">
+              <Detail label={t('auditLog.by')}>{actor(entry, t)}</Detail>
+              <Detail label={t('auditLog.result')}>
                 <ResultBadge entry={entry} />
                 {entry.message && <span className="ml-2 text-destructive">{entry.message}</span>}
               </Detail>
-              <Detail label="Resource">
+              <Detail label={t('auditLog.resource')}>
                 {entry.resourceType ? <span className="capitalize">{entry.resourceType}</span> : '—'}
                 {entry.resourceName && <span className="font-medium"> · {entry.resourceName}</span>}
                 {entry.resourceId && <span className="ml-2 font-mono text-xs text-muted-foreground">{entry.resourceId}</span>}
               </Detail>
-              <Detail label="Request">
+              <Detail label={t('auditLog.request')}>
                 <span className="font-mono text-xs">
                   {entry.method} {entry.path}
                 </span>
-                {entry.durationMs != null && <span className="ml-2 text-muted-foreground">{entry.durationMs} ms</span>}
+                {entry.durationMs != null && <span className="ml-2 text-muted-foreground">{t('heartbeatLog.ms', { ms: entry.durationMs })}</span>}
               </Detail>
-              <Detail label="IP">{entry.ip ?? '—'}</Detail>
-              <Detail label="Browser">
+              <Detail label={t('auditLog.ip')}>{entry.ip ?? '—'}</Detail>
+              <Detail label={t('auditLog.browser')}>
                 <span className="text-xs text-muted-foreground">{entry.userAgent ?? '—'}</span>
               </Detail>
             </dl>
-            {hasRequest && <JsonBlock label="Submitted data (secrets redacted)" value={entry.request} />}
-            {hasMeta && <JsonBlock label="Details" value={entry.meta} />}
+            {hasRequest && <JsonBlock label={t('auditLog.submittedData')} value={entry.request} />}
+            {hasMeta && <JsonBlock label={t('auditLog.details')} value={entry.meta} />}
           </>
         )}
       </DialogContent>
@@ -220,6 +224,12 @@ function EntryDetails({ entry, onClose }: { entry: AuditEntry | null; onClose: (
 }
 
 export default function AuditLog() {
+  const { t } = useTranslation()
+  const RESULTS = [
+    { value: 'all', label: t('auditLog.allResults') },
+    { value: 'success', label: t('auditLog.succeeded') },
+    { value: 'failed', label: t('heartbeatLog.statusFilter.failed') },
+  ]
   const filters = useAuditFilters()
   const [action, setAction] = useState('')
   const [result, setResult] = useState('all')
@@ -278,11 +288,11 @@ export default function AuditLog() {
   return (
     <>
       <PageHeader
-        title="Audit Log"
-        description="Every change made in the app, by you or automatically: what, when, and whether it worked."
+        title={t('auditLog.title')}
+        description={t('auditLog.description')}
         actions={
           <Button variant="outline" onClick={() => logs.refetch()} disabled={logs.isFetching}>
-            <RefreshCw className={cn(logs.isFetching && 'animate-spin')} /> Refresh
+            <RefreshCw className={cn(logs.isFetching && 'animate-spin')} /> {t('common.refresh')}
           </Button>
         }
       />
@@ -293,29 +303,29 @@ export default function AuditLog() {
           <Input
             value={search}
             onChange={(e) => withReset(setSearch)(e.target.value)}
-            placeholder="Search account, proxy, error…"
-            aria-label="Search audit log"
+            placeholder={t('auditLog.searchPlaceholder')}
+            aria-label={t('auditLog.searchAriaLabel')}
             className="pl-9"
           />
         </div>
         <SelectField
           value={action}
           onChange={withReset(setAction)}
-          options={(filters.data?.actions ?? []).map((a) => ({ value: a, label: actionLabel(a) }))}
-          emptyLabel="All actions"
+          options={(filters.data?.actions ?? []).map((a) => ({ value: a, label: actionLabel(a, t) }))}
+          emptyLabel={t('auditLog.allActions')}
           className="w-60"
-          aria-label="Filter by action"
+          aria-label={t('auditLog.filterByAction')}
         />
-        <SelectField value={result} onChange={withReset(setResult)} options={RESULTS} className="w-36" aria-label="Filter by result" />
-        <DatePicker value={from} onChange={withReset(setFrom)} max={to || undefined} placeholder="From date" aria-label="From date" className="w-40" />
-        <DatePicker value={to} onChange={withReset(setTo)} min={from || undefined} placeholder="To date" aria-label="To date" className="w-40" />
+        <SelectField value={result} onChange={withReset(setResult)} options={RESULTS} className="w-36" aria-label={t('auditLog.filterByResult')} />
+        <DatePicker value={from} onChange={withReset(setFrom)} max={to || undefined} placeholder={t('auditLog.fromDate')} aria-label={t('auditLog.fromDate')} className="w-40" />
+        <DatePicker value={to} onChange={withReset(setTo)} min={from || undefined} placeholder={t('auditLog.toDate')} aria-label={t('auditLog.toDate')} className="w-40" />
         <Button variant="outline" onClick={() => setAdvancedOpen(true)} aria-haspopup="dialog">
-          <SlidersHorizontal /> Filters
+          <SlidersHorizontal /> {t('common.filters')}
           {advancedCount > 0 && <Badge className="ml-1 px-1.5 py-0">{advancedCount}</Badge>}
         </Button>
         {filtersActive && (
           <Button variant="ghost" onClick={resetFilters} className="text-muted-foreground">
-            <X /> Reset
+            <X /> {t('common.reset')}
           </Button>
         )}
       </div>
@@ -323,19 +333,19 @@ export default function AuditLog() {
       {logs.isError ? (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>Couldn’t load the audit log: {getErrorMessage(logs.error)}</AlertDescription>
+          <AlertDescription>{t('auditLog.couldNotLoad', { error: getErrorMessage(logs.error) })}</AlertDescription>
         </Alert>
       ) : (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <SortHeader field="createdAt" sort={sort} onSort={withReset(setSort)}>Time</SortHeader>
-                <TableHead>By</TableHead>
-                <SortHeader field="action" sort={sort} onSort={withReset(setSort)}>Action</SortHeader>
-                <SortHeader field="resource" sort={sort} onSort={withReset(setSort)}>Resource</SortHeader>
-                <SortHeader field="status" sort={sort} onSort={withReset(setSort)}>Result</SortHeader>
-                <SortHeader field="ip" sort={sort} onSort={withReset(setSort)}>IP</SortHeader>
+                <SortHeader field="createdAt" sort={sort} onSort={withReset(setSort)}>{t('auditLog.columnTime')}</SortHeader>
+                <TableHead>{t('auditLog.by')}</TableHead>
+                <SortHeader field="action" sort={sort} onSort={withReset(setSort)}>{t('auditLog.columnAction')}</SortHeader>
+                <SortHeader field="resource" sort={sort} onSort={withReset(setSort)}>{t('auditLog.resource')}</SortHeader>
+                <SortHeader field="status" sort={sort} onSort={withReset(setSort)}>{t('auditLog.result')}</SortHeader>
+                <SortHeader field="ip" sort={sort} onSort={withReset(setSort)}>{t('auditLog.ip')}</SortHeader>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
@@ -351,7 +361,7 @@ export default function AuditLog() {
               ) : !logs.data?.logs.length ? (
                 <TableRow>
                   <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                    {filtersActive ? 'No entries match these filters.' : 'No activity recorded yet.'}
+                    {filtersActive ? t('auditLog.noneMatchFilters') : t('auditLog.noActivityYet')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -360,9 +370,9 @@ export default function AuditLog() {
                   return (
                     <TableRow key={e._id} className="cursor-pointer" onClick={() => setSelected(e)}>
                       <TableCell className="whitespace-nowrap tabular-nums">{formatExact(e.createdAt)}</TableCell>
-                      <TableCell className={cn('whitespace-nowrap', !!e.meta?.automatic && 'text-muted-foreground')}>{actor(e)}</TableCell>
+                      <TableCell className={cn('whitespace-nowrap', !!e.meta?.automatic && 'text-muted-foreground')}>{actor(e, t)}</TableCell>
                       <TableCell>
-                        <div className="font-medium">{actionLabel(e.action)}</div>
+                        <div className="font-medium">{actionLabel(e.action, t)}</div>
                         <div className="font-mono text-xs text-muted-foreground">
                           {e.method} {e.path}
                         </div>
@@ -388,7 +398,7 @@ export default function AuditLog() {
                       </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">{e.ip ?? '—'}</TableCell>
                       <TableCell onClick={(ev) => ev.stopPropagation()}>
-                        <IconAction label="View details" icon={Eye} onClick={() => setSelected(e)} />
+                        <IconAction label={t('auditLog.viewDetails')} icon={Eye} onClick={() => setSelected(e)} />
                       </TableCell>
                     </TableRow>
                   )
@@ -402,18 +412,18 @@ export default function AuditLog() {
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <span>
           {pg && pg.total > 0
-            ? `Showing ${(pg.page - 1) * pg.limit + 1}–${Math.min(pg.page * pg.limit, pg.total)} of ${pg.total.toLocaleString()}`
-            : 'No entries'}
+            ? t('heartbeatLog.showingEntries', { from: (pg.page - 1) * pg.limit + 1, to: Math.min(pg.page * pg.limit, pg.total), total: pg.total.toLocaleString() })
+            : t('heartbeatLog.noEntries')}
         </span>
         {pg && pg.pages > 1 && (
           <div className="flex items-center gap-1">
-            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setPage((p) => p - 1)} disabled={page <= 1 || logs.isFetching} aria-label="Previous page">
+            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setPage((p) => p - 1)} disabled={page <= 1 || logs.isFetching} aria-label={t('dataTable.previousPage')}>
               <ChevronLeft />
             </Button>
             <span className="px-2 tabular-nums">
-              Page {pg.page} of {pg.pages}
+              {t('dataTable.pageOf', { page: pg.page, pages: pg.pages })}
             </span>
-            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setPage((p) => p + 1)} disabled={page >= pg.pages || logs.isFetching} aria-label="Next page">
+            <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setPage((p) => p + 1)} disabled={page >= pg.pages || logs.isFetching} aria-label={t('dataTable.nextPage')}>
               <ChevronRight />
             </Button>
           </div>

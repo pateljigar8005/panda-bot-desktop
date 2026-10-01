@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -15,9 +16,10 @@ const styles: Record<string, string> = {
 
 /** Colour-coded status pill: green / yellow / red / dark red / gray (inactive, unknown). */
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
+  const { t } = useTranslation()
   return (
     <Badge variant="outline" className={cn('border-transparent capitalize', styles[status] ?? styles.unknown, className)}>
-      {status.replace(/_/g, ' ')}
+      {t(`status.${status}`, status.replace(/_/g, ' '))}
     </Badge>
   )
 }

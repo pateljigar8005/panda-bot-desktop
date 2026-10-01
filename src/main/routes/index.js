@@ -5,6 +5,7 @@ const master = require('./master');
 const settings = require('./settings');
 const system = require('./system');
 const audit = require('./audit');
+const heartbeatLogs = require('./heartbeatLogs');
 
 function register(router) {
     accounts.register(router);
@@ -13,6 +14,7 @@ function register(router) {
     settings.register(router);
     system.register(router);
     audit.register(router);
+    heartbeatLogs.register(router);
 }
 
 module.exports = { register };

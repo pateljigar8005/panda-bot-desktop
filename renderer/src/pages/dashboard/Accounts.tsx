@@ -1,7 +1,8 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import { AlertTriangle, Eye, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2, Users, Wifi } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { DataTable } from '@/components/shared/DataTable'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -25,20 +26,17 @@ export const deviceLabel = (id: Account['deviceId']) => (id === '1' ? 'iOS' : 'A
 
 // Every possible value, so filters offer all of them — not just those on the current page
 const STATUSES: AccountStatus[] = ['active', 'inactive', 'on_hold', 'expired', 'banned']
-const STATUS_LABELS: Record<AccountStatus, string> = { active: 'Active', inactive: 'Inactive', on_hold: 'On hold', expired: 'Expired', banned: 'Banned' }
-const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))
-const DEVICE_OPTIONS = [{ value: 'iOS', label: 'iOS' }, { value: 'Android', label: 'Android' }]
-const BET_MODE_OPTIONS = [{ value: 'fixed', label: 'Fixed' }, { value: 'proportional', label: 'Proportional' }]
 
 function RowActions({ account }: { account: Account }) {
+  const { t } = useTranslation()
   const actions = useAccountActions()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   return (
     <>
       <div className="flex items-center justify-end gap-0.5">
-        <IconAction label="View account details" icon={Eye} to={`/accounts/${account._id}`} />
-        <IconAction label="Edit account" icon={Pencil} to={`/accounts/${account._id}/edit`} />
+        <IconAction label={t('accounts.viewDetails')} icon={Eye} to={`/accounts/${account._id}`} />
+        <IconAction label={t('accounts.editAccount')} icon={Pencil} to={`/accounts/${account._id}/edit`} />
         {canToggle(account) && (
           <IconAction
             label={toggleLabel(account)}
@@ -47,15 +45,15 @@ function RowActions({ account }: { account: Account }) {
             loading={actions.toggling}
           />
         )}
-        <IconAction label="Test connection (send one heartbeat now)" icon={Wifi} onClick={() => actions.runTest(account)} loading={actions.testing} />
-        <IconAction label="Delete account" icon={Trash2} onClick={() => setConfirmOpen(true)} destructive />
+        <IconAction label={t('accounts.testConnection')} icon={Wifi} onClick={() => actions.runTest(account)} loading={actions.testing} />
+        <IconAction label={t('accounts.deleteAccount')} icon={Trash2} onClick={() => setConfirmOpen(true)} destructive />
       </div>
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Delete account?"
-        description={`“${account.name}” will be permanently removed. This can't be undone.`}
-        confirmLabel="Delete"
+        title={t('accounts.deleteTitle')}
+        description={t('accounts.deleteDescription', { name: account.name })}
+        confirmLabel={t('common.delete')}
         loading={actions.deleting}
         onConfirm={() => actions.remove(account, () => setConfirmOpen(false))}
       />
@@ -63,42 +61,57 @@ function RowActions({ account }: { account: Account }) {
   )
 }
 
-const columns: ColumnDef<Account>[] = [
-  {
-    accessorKey: 'name',
-    header: 'Name',
-    meta: { filter: 'text' },
-    cell: ({ row }) => (
-      <Link to={`/accounts/${row.original._id}`} className="font-medium hover:underline">
-        {row.original.name}
-      </Link>
-    ),
-  },
-  { accessorKey: 'uid', header: 'UID', meta: { filter: 'text' } },
-  { id: 'device', accessorFn: (row) => deviceLabel(row.deviceId), header: 'Device', meta: { filter: 'select', options: DEVICE_OPTIONS } },
-  { accessorKey: 'status', header: 'Status', meta: { filter: 'select', options: STATUS_OPTIONS }, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
-  { accessorKey: 'betMode', header: 'Bet mode', meta: { filter: 'select', options: BET_MODE_OPTIONS }, cell: ({ row }) => <span className="capitalize">{row.original.betMode}</span> },
-  {
-    id: 'lastHeartbeatAt',
-    accessorFn: (row) => row.lastHeartbeatAt,
-    header: 'Last heartbeat',
-    meta: { filter: 'date' },
-    sortUndefined: 'last',
-    cell: ({ row }) => <RelativeTime iso={row.original.lastHeartbeatAt} />,
-  },
-  {
-    accessorKey: 'heartbeatErrors',
-    header: 'Errors',
-    meta: { filter: 'number' },
-    cell: ({ row }) => (isSetupIncomplete(row.original) ? <SetupIssueBadge account={row.original} /> : <HeartbeatErrorsButton account={row.original} />),
-  },
-  { accessorKey: 'lastBalance', header: 'Balance', meta: { filter: 'number' }, cell: ({ row }) => row.original.lastBalance.toFixed(2) },
-  { id: 'actions', header: () => <span className="block text-right">Actions</span>, enableSorting: false, cell: ({ row }) => <RowActions account={row.original} /> },
-]
-
-
-
 export default function Accounts() {
+  const { t } = useTranslation()
+
+  const STATUS_LABELS: Record<AccountStatus, string> = {
+    active: t('accounts.statusActive'),
+    inactive: t('accounts.statusInactive'),
+    on_hold: t('accounts.statusOnHold'),
+    expired: t('accounts.statusExpired'),
+    banned: t('accounts.statusBanned'),
+  }
+  const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))
+  const DEVICE_OPTIONS = [{ value: 'iOS', label: 'iOS' }, { value: 'Android', label: 'Android' }]
+  const BET_MODE_OPTIONS = [{ value: 'fixed', label: t('accounts.betModeFixed') }, { value: 'proportional', label: t('accounts.betModeProportional') }]
+
+  const columns: ColumnDef<Account>[] = useMemo(
+    () => [
+      {
+        accessorKey: 'name',
+        header: t('accounts.columnName'),
+        meta: { filter: 'text' },
+        cell: ({ row }) => (
+          <Link to={`/accounts/${row.original._id}`} className="font-medium hover:underline">
+            {row.original.name}
+          </Link>
+        ),
+      },
+      { accessorKey: 'uid', header: t('accounts.columnUid'), meta: { filter: 'text' } },
+      { id: 'device', accessorFn: (row) => deviceLabel(row.deviceId), header: t('accounts.columnDevice'), meta: { filter: 'select', options: DEVICE_OPTIONS } },
+      { accessorKey: 'status', header: t('accounts.columnStatus'), meta: { filter: 'select', options: STATUS_OPTIONS }, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
+      { accessorKey: 'betMode', header: t('accounts.columnBetMode'), meta: { filter: 'select', options: BET_MODE_OPTIONS }, cell: ({ row }) => <span className="capitalize">{row.original.betMode}</span> },
+      {
+        id: 'lastHeartbeatAt',
+        accessorFn: (row) => row.lastHeartbeatAt,
+        header: t('accounts.columnLastHeartbeat'),
+        meta: { filter: 'date' },
+        sortUndefined: 'last',
+        cell: ({ row }) => <RelativeTime iso={row.original.lastHeartbeatAt} />,
+      },
+      {
+        accessorKey: 'heartbeatErrors',
+        header: t('accounts.columnErrors'),
+        meta: { filter: 'number' },
+        cell: ({ row }) => (isSetupIncomplete(row.original) ? <SetupIssueBadge account={row.original} /> : <HeartbeatErrorsButton account={row.original} />),
+      },
+      { accessorKey: 'lastBalance', header: t('accounts.columnBalance'), meta: { filter: 'number' }, cell: ({ row }) => row.original.lastBalance.toFixed(2) },
+      { id: 'actions', header: () => <span className="block text-right">{t('accounts.columnActions')}</span>, enableSorting: false, cell: ({ row }) => <RowActions account={row.original} /> },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t],
+  )
+
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(20)
   const [status, setStatus] = useState<AccountStatus | ''>('')
@@ -122,25 +135,30 @@ export default function Accounts() {
   return (
     <>
       <PageHeader
-        title="Accounts"
-        description="Manage sub-accounts, their bet settings and connection health."
+        title={t('accounts.title')}
+        description={t('accounts.description')}
         actions={
-          <Button asChild>
-            <Link to="/accounts/new">
-              <Plus /> Add Account
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+              <RefreshCw className={isFetching ? 'animate-spin' : undefined} /> {t('common.refresh')}
+            </Button>
+            <Button asChild>
+              <Link to="/accounts/new">
+                <Plus /> {t('accounts.addAccount')}
+              </Link>
+            </Button>
+          </>
         }
       />
 
       {isError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Couldn’t load accounts</AlertTitle>
+          <AlertTitle>{t('accounts.couldNotLoad')}</AlertTitle>
           <AlertDescription className="flex items-center justify-between gap-4">
             <span>{getErrorMessage(error)}</span>
             <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
-              <RefreshCw /> Retry
+              <RefreshCw /> {t('common.retry')}
             </Button>
           </AlertDescription>
         </Alert>
@@ -149,12 +167,12 @@ export default function Accounts() {
       {showEmpty ? (
         <EmptyState
           icon={Users}
-          title="No accounts yet"
-          description="Add your first sub-account to start mirroring bets."
+          title={t('accounts.noneYetTitle')}
+          description={t('accounts.noneYetDescription')}
           action={
             <Button asChild>
               <Link to="/accounts/new">
-                <Plus /> Add Account
+                <Plus /> {t('accounts.addAccount')}
               </Link>
             </Button>
           }
@@ -165,7 +183,7 @@ export default function Accounts() {
           data={rows}
           loading={isLoading}
           globalSearch={false}
-          emptyMessage="No accounts match your filters."
+          emptyMessage={t('accounts.noneMatchFilters')}
           toolbarLeft={
             <>
               <Input
@@ -174,8 +192,8 @@ export default function Accounts() {
                   setSearch(e.target.value)
                   setPage(1)
                 }}
-                placeholder="Search name or UID…"
-                aria-label="Search accounts"
+                placeholder={t('accounts.searchPlaceholder')}
+                aria-label={t('accounts.searchAriaLabel')}
                 className="sm:max-w-xs"
               />
               <SelectField
@@ -185,8 +203,8 @@ export default function Accounts() {
                   setPage(1)
                 }}
                 options={STATUS_OPTIONS}
-                emptyLabel="All statuses"
-                aria-label="Filter by status"
+                emptyLabel={t('accounts.allStatuses')}
+                aria-label={t('accounts.filterByStatus')}
                 className="sm:w-44"
               />
             </>

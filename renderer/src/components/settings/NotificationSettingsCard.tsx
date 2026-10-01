@@ -1,7 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, Send } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { NumberInput } from '@/components/shared/NumberInput'
@@ -21,48 +23,37 @@ import { useNotificationSettings, useTestNotification, useUpdateNotificationSett
 import { ApiError, getErrorMessage } from '@/services/api'
 import type { NotificationEvent, NotificationSettings, NotificationSettingsInput, SmtpSecurity } from '@/types'
 
-const SECURITY_OPTIONS: { value: SmtpSecurity; label: string; port: number }[] = [
-  { value: 'starttls', label: 'STARTTLS (port 587)', port: 587 },
-  { value: 'ssl', label: 'SSL/TLS (port 465)', port: 465 },
-  { value: 'none', label: 'None (port 25, local relay)', port: 25 },
-]
-
-const EVENTS: { key: NotificationEvent; label: string; hint: string }[] = [
-  { key: 'tokenExpired', label: 'Token expired', hint: 'The platform rejected an account’s token; its heartbeats stop.' },
-  { key: 'heartbeatFailing', label: 'Heartbeats failing', hint: 'An account fails several heartbeats in a row (threshold below).' },
-  { key: 'setupFailed', label: 'Setup failed', hint: 'Session details (sid/mc) couldn’t be fetched on create, token change or retry.' },
-  { key: 'accountOnHold', label: 'Account put on hold', hint: 'An account was paused automatically after too many failed heartbeats in a row.' },
-]
-
 const emailish = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/
 const parseRecipients = (text: string) => [...new Set(text.split(/[\s,;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean))]
 
-const schema = z
-  .object({
-    enabled: z.boolean(),
-    host: z.string().trim().max(253),
-    port: z.number({ invalid_type_error: 'Port is required', required_error: 'Port is required' }).int().min(1).max(65535),
-    security: z.enum(['starttls', 'ssl', 'none']),
-    username: z.string().trim().max(254),
-    password: z.string().max(500),
-    fromAddress: z
-      .string()
-      .trim()
-      .refine((v) => !v || emailish.test(v) || /<[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>$/.test(v), 'Enter an email, e.g. alerts@example.com or "Panda Bot <alerts@example.com>"'),
-    recipients: z.string().refine((v) => parseRecipients(v).every((e) => emailish.test(e)), 'One or more recipients isn’t a valid email'),
-    tokenExpired: z.boolean(),
-    heartbeatFailing: z.boolean(),
-    setupFailed: z.boolean(),
-    accountOnHold: z.boolean(),
-    heartbeatFailureThreshold: z.number({ invalid_type_error: 'Required', required_error: 'Required' }).int().min(1).max(1000),
-  })
-  .superRefine((v, ctx) => {
-    if (!v.enabled) return
-    if (!v.host) ctx.addIssue({ code: 'custom', path: ['host'], message: 'Required to send notifications' })
-    if (!v.fromAddress) ctx.addIssue({ code: 'custom', path: ['fromAddress'], message: 'Required to send notifications' })
-    if (!parseRecipients(v.recipients).length) ctx.addIssue({ code: 'custom', path: ['recipients'], message: 'Add at least one recipient' })
-  })
-type Values = z.infer<typeof schema>
+function buildSchema(t: TFunction) {
+  return z
+    .object({
+      enabled: z.boolean(),
+      host: z.string().trim().max(253),
+      port: z.number({ invalid_type_error: t('notificationSettings.portRequired'), required_error: t('notificationSettings.portRequired') }).int().min(1).max(65535),
+      security: z.enum(['starttls', 'ssl', 'none']),
+      username: z.string().trim().max(254),
+      password: z.string().max(500),
+      fromAddress: z
+        .string()
+        .trim()
+        .refine((v) => !v || emailish.test(v) || /<[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>$/.test(v), t('notificationSettings.enterEmail')),
+      recipients: z.string().refine((v) => parseRecipients(v).every((e) => emailish.test(e)), t('notificationSettings.invalidRecipient')),
+      tokenExpired: z.boolean(),
+      heartbeatFailing: z.boolean(),
+      setupFailed: z.boolean(),
+      accountOnHold: z.boolean(),
+      heartbeatFailureThreshold: z.number({ invalid_type_error: t('notificationSettings.required'), required_error: t('notificationSettings.required') }).int().min(1).max(1000),
+    })
+    .superRefine((v, ctx) => {
+      if (!v.enabled) return
+      if (!v.host) ctx.addIssue({ code: 'custom', path: ['host'], message: t('notificationSettings.requiredToSend') })
+      if (!v.fromAddress) ctx.addIssue({ code: 'custom', path: ['fromAddress'], message: t('notificationSettings.requiredToSend') })
+      if (!parseRecipients(v.recipients).length) ctx.addIssue({ code: 'custom', path: ['recipients'], message: t('notificationSettings.addAtLeastOne') })
+    })
+}
+type Values = z.infer<ReturnType<typeof buildSchema>>
 
 const toValues = (s: NotificationSettings): Values => ({
   enabled: s.enabled,
@@ -95,6 +86,22 @@ const toPayload = (v: Values): NotificationSettingsInput => ({
 
 /** Email alerts: SMTP server, recipients and which events send an email. */
 export function NotificationSettingsCard() {
+  const { t } = useTranslation()
+  const schema = useMemo(() => buildSchema(t), [t])
+
+  const SECURITY_OPTIONS: { value: SmtpSecurity; label: string; port: number }[] = [
+    { value: 'starttls', label: t('notificationSettings.starttls'), port: 587 },
+    { value: 'ssl', label: t('notificationSettings.ssl'), port: 465 },
+    { value: 'none', label: t('notificationSettings.noneSecurity'), port: 25 },
+  ]
+
+  const EVENTS: { key: NotificationEvent; label: string; hint: string }[] = [
+    { key: 'tokenExpired', label: t('notificationSettings.eventTokenExpired'), hint: t('notificationSettings.eventTokenExpiredHint') },
+    { key: 'heartbeatFailing', label: t('notificationSettings.eventHeartbeatFailing'), hint: t('notificationSettings.eventHeartbeatFailingHint') },
+    { key: 'setupFailed', label: t('notificationSettings.eventSetupFailed'), hint: t('notificationSettings.eventSetupFailedHint') },
+    { key: 'accountOnHold', label: t('notificationSettings.eventAccountOnHold'), hint: t('notificationSettings.eventAccountOnHoldHint') },
+  ]
+
   const query = useNotificationSettings()
   const save = useUpdateNotificationSettings()
   const test = useTestNotification()
@@ -109,7 +116,7 @@ export function NotificationSettingsCard() {
 
   const onSave = (v: Values) =>
     save.mutate(toPayload(v), {
-      onSuccess: () => toast.success(v.enabled ? 'Notifications saved and enabled' : 'Notification settings saved'),
+      onSuccess: () => toast.success(v.enabled ? t('notificationSettings.savedEnabled') : t('notificationSettings.saved')),
       onError: (error) => toast.error(getErrorMessage(error)),
     })
 
@@ -119,13 +126,13 @@ export function NotificationSettingsCard() {
     const v = form.getValues()
     if (!ok) return
     if (!v.host || !v.fromAddress || !parseRecipients(v.recipients).length) {
-      toast.error('Fill in host, from address and at least one recipient to send a test')
+      toast.error(t('notificationSettings.fillRequiredForTest'))
       return
     }
     test.mutate(toPayload(v), {
       onSuccess: (r) => toast.success(r.message),
       onError: (error) =>
-        toast.error(error instanceof ApiError && error.status === 502 ? 'Test email failed' : 'Couldn’t send test email', {
+        toast.error(error instanceof ApiError && error.status === 502 ? t('notificationSettings.testFailed') : t('notificationSettings.testCouldNotSend'), {
           description: getErrorMessage(error).replace(/^Test email failed:\s*/, ''), // the SMTP server's own reply
           duration: 15_000,
         }),
@@ -135,8 +142,8 @@ export function NotificationSettingsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Email notifications</CardTitle>
-        <CardDescription>Get an email when an account’s token expires or something needs attention.</CardDescription>
+        <CardTitle>{t('notificationSettings.title')}</CardTitle>
+        <CardDescription>{t('notificationSettings.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         {query.isLoading ? (
@@ -144,7 +151,7 @@ export function NotificationSettingsCard() {
         ) : query.isError ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>Couldn’t load notification settings: {getErrorMessage(query.error)}</AlertDescription>
+            <AlertDescription>{t('notificationSettings.couldNotLoad', { error: getErrorMessage(query.error) })}</AlertDescription>
           </Alert>
         ) : (
           <Form {...form}>
@@ -155,8 +162,8 @@ export function NotificationSettingsCard() {
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between gap-4 space-y-0 rounded-md border p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Send email notifications</FormLabel>
-                      <FormDescription>Alerts for the events selected below. The same alert for an account is sent at most once an hour.</FormDescription>
+                      <FormLabel className="text-base">{t('notificationSettings.sendEmailNotifications')}</FormLabel>
+                      <FormDescription>{t('notificationSettings.sendEmailNotificationsHint')}</FormDescription>
                     </div>
                     <FormControl>
                       <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -166,14 +173,14 @@ export function NotificationSettingsCard() {
               />
 
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold">SMTP server</h3>
+                <h3 className="text-sm font-semibold">{t('notificationSettings.smtpServer')}</h3>
                 <div className="grid gap-4 md:grid-cols-[1fr_140px_220px]">
                   <FormField
                     control={form.control}
                     name="host"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Host</FormLabel>
+                        <FormLabel>{t('notificationSettings.host')}</FormLabel>
                         <FormControl>
                           <Input placeholder="smtp.gmail.com" autoComplete="off" {...field} />
                         </FormControl>
@@ -186,7 +193,7 @@ export function NotificationSettingsCard() {
                     name="port"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Port</FormLabel>
+                        <FormLabel>{t('notificationSettings.port')}</FormLabel>
                         <FormControl>
                           <NumberInput {...field} />
                         </FormControl>
@@ -199,7 +206,7 @@ export function NotificationSettingsCard() {
                     name="security"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Security</FormLabel>
+                        <FormLabel>{t('notificationSettings.security')}</FormLabel>
                         <FormControl>
                           <SelectField
                             value={field.value}
@@ -224,9 +231,9 @@ export function NotificationSettingsCard() {
                     name="username"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Username</FormLabel>
+                        <FormLabel>{t('notificationSettings.username')}</FormLabel>
                         <FormControl>
-                          <Input autoComplete="off" placeholder="Usually your email address" {...field} />
+                          <Input autoComplete="off" placeholder={t('notificationSettings.usernamePlaceholder')} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -237,11 +244,11 @@ export function NotificationSettingsCard() {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Password</FormLabel>
+                        <FormLabel>{t('notificationSettings.password')}</FormLabel>
                         <FormControl>
-                          <PasswordInput autoComplete="new-password" placeholder={saved?.smtp.hasPassword ? 'Saved — leave blank to keep' : 'SMTP password or app password'} {...field} />
+                          <PasswordInput autoComplete="new-password" placeholder={saved?.smtp.hasPassword ? t('notificationSettings.passwordSavedPlaceholder') : t('notificationSettings.passwordPlaceholder')} {...field} />
                         </FormControl>
-                        <FormDescription>Stored encrypted. For Gmail, use an app password.</FormDescription>
+                        <FormDescription>{t('notificationSettings.passwordHint')}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -252,7 +259,7 @@ export function NotificationSettingsCard() {
                   name="fromAddress"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>From address</FormLabel>
+                      <FormLabel>{t('notificationSettings.fromAddress')}</FormLabel>
                       <FormControl>
                         <Input placeholder="Panda Bot <alerts@example.com>" {...field} />
                       </FormControl>
@@ -265,11 +272,11 @@ export function NotificationSettingsCard() {
                   name="recipients"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Recipients</FormLabel>
+                      <FormLabel>{t('notificationSettings.recipients')}</FormLabel>
                       <FormControl>
                         <Textarea rows={2} placeholder="ops@example.com, me@example.com" {...field} />
                       </FormControl>
-                      <FormDescription>Separate addresses with commas or new lines.</FormDescription>
+                      <FormDescription>{t('notificationSettings.recipientsHint')}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -279,7 +286,7 @@ export function NotificationSettingsCard() {
               <Separator />
 
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold">Notify me when</h3>
+                <h3 className="text-sm font-semibold">{t('notificationSettings.notifyMeWhen')}</h3>
                 {EVENTS.map((e) => (
                   <FormField
                     key={e.key}
@@ -303,11 +310,11 @@ export function NotificationSettingsCard() {
                   name="heartbeatFailureThreshold"
                   render={({ field }) => (
                     <FormItem className="max-w-xs">
-                      <FormLabel>Failed heartbeats before alerting</FormLabel>
+                      <FormLabel>{t('notificationSettings.failureThreshold')}</FormLabel>
                       <FormControl>
                         <NumberInput {...field} disabled={!enabled} />
                       </FormControl>
-                      <FormDescription>Consecutive failures (a heartbeat runs about every 5 seconds).</FormDescription>
+                      <FormDescription>{t('notificationSettings.failureThresholdHint')}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -316,10 +323,10 @@ export function NotificationSettingsCard() {
 
               <div className="flex flex-wrap justify-end gap-2">
                 <Button type="button" variant="outline" onClick={onTest} disabled={test.isPending}>
-                  {test.isPending ? <Spinner /> : <Send />} Send test email
+                  {test.isPending ? <Spinner /> : <Send />} {t('notificationSettings.sendTestEmail')}
                 </Button>
                 <Button type="submit" disabled={save.isPending}>
-                  {save.isPending && <Spinner />} Save
+                  {save.isPending && <Spinner />} {t('common.save')}
                 </Button>
               </div>
             </form>
