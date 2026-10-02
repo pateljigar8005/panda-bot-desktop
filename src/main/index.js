@@ -8,6 +8,7 @@ const encryptionService = require('./services/encryptionService');
 const systemSettings = require('./services/systemSettingsService');
 const killSwitch = require('./services/killSwitchService');
 const heartbeatScheduler = require('./services/heartbeatScheduler');
+const browserAutomation = require('./services/browserAutomation');
 const events = require('./services/events');
 const { recordSystemAction } = require('./services/auditTrail');
 const logger = require('./logger');
@@ -51,6 +52,9 @@ async function stopEverything(reason, meta) {
     const result = killSwitch.activate({ reason });
     recordSystemAction('kill_switch_activated', { meta: { automatic: true, stoppedHeartbeats: result.stoppedHeartbeats, ...meta } });
     await heartbeatScheduler.waitForIdle(SHUTDOWN_GRACE_MS);
+    // Best-effort: an orphaned Chromium process left running after we quit is a worse outcome
+    // than a browser-close error we just log and move past.
+    await browserAutomation.close().catch((err) => logger.warn('Could not close the master browser on quit', err.message));
 }
 
 function createMainWindow() {
@@ -71,6 +75,7 @@ function createMainWindow() {
             spellcheck: false
         }
     });
+    browserAutomation.setWindow(mainWindow);
 
     // Open filling the screen (taskbar / menu bar stay visible); width/height above are the
     // size it returns to when the user un-maximizes
@@ -153,9 +158,13 @@ if (!app.requestSingleInstanceLock()) {
         if (quitConfirmed) return; // already decided — let every operation finish stopping and exit
 
         const running = heartbeatScheduler.runningCount();
+        const browserRunning = browserAutomation.status().running;
         if (running === 0) {
             quitConfirmed = true;
             heartbeatScheduler.stopAll();
+            // Fire-and-forget: this path doesn't block quit on anything else either, and
+            // 'will-quit' gives the close a brief window to actually finish before the process exits.
+            if (browserRunning) browserAutomation.close().catch((err) => logger.warn('Could not close the master browser on quit', err.message));
             return;
         }
 
@@ -168,7 +177,7 @@ if (!app.requestSingleInstanceLock()) {
                 defaultId: 0,
                 cancelId: 0,
                 title: 'Quit Panda Bot?',
-                message: `This will stop heartbeats for ${running} active account${running === 1 ? '' : 's'} and arm the kill switch.`,
+                message: `This will stop heartbeats for ${running} active account${running === 1 ? '' : 's'}${browserRunning ? ', close the master browser,' : ''} and arm the kill switch.`,
                 detail: 'Bets won’t be mirrored and sessions may expire while the app is closed. ' +
                     'Nothing resumes on the next launch until you release the kill switch in Settings.'
             })

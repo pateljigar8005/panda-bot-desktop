@@ -1,9 +1,11 @@
 import { endOfDay, startOfDay } from 'date-fns'
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, RefreshCw, Search, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
+import { toast } from 'sonner'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { IconAction } from '@/components/shared/IconAction'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -17,7 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useAuditFilters, useAuditLogs } from '@/hooks/useAuditLogs'
+import { useAuditFilters, useAuditLogs, useClearAuditLogs } from '@/hooks/useAuditLogs'
 import { useDateLocale } from '@/hooks/useDateLocale'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { getErrorMessage } from '@/services/api'
@@ -38,6 +40,7 @@ const ACTION_KEYS: Record<string, string> = {
   account_setup_retried: 'auditLog.actionAccountSetupRetried',
   heartbeat_logs_cleared: 'auditLog.actionHeartbeatLogsCleared',
   activity_log_cleared: 'auditLog.actionActivityLogCleared',
+  audit_log_cleared: 'auditLog.actionAuditLogCleared',
   account_auto_held: 'auditLog.actionAccountAutoHeld',
   proxy_created: 'auditLog.actionProxyCreated',
   proxy_updated: 'auditLog.actionProxyUpdated',
@@ -49,6 +52,12 @@ const ACTION_KEYS: Record<string, string> = {
   system_settings_updated: 'auditLog.actionSystemSettingsUpdated',
   kill_switch_activated: 'auditLog.actionKillSwitchActivated',
   kill_switch_released: 'auditLog.actionKillSwitchReleased',
+  copy_betting_armed: 'auditLog.actionCopyBettingArmed',
+  copy_betting_disarmed: 'auditLog.actionCopyBettingDisarmed',
+  copy_bet_run: 'auditLog.actionCopyBetRun',
+  browser_launched: 'auditLog.actionBrowserLaunched',
+  browser_closed: 'auditLog.actionBrowserClosed',
+  browser_traffic_cleared: 'auditLog.actionBrowserTrafficCleared',
 }
 /** One local owner: an entry is either theirs or the app's own (automatic). */
 const actor = (entry: AuditEntry, t: TFunction) => (entry.meta?.automatic ? t('auditLog.systemAutomatic') : t('auditLog.you'))
@@ -253,6 +262,8 @@ export default function AuditLog() {
   const [sort, setSort] = useState<Sort>(DEFAULT_SORT)
   const [advanced, setAdvanced] = useState<Advanced>(EMPTY_ADVANCED)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const clear = useClearAuditLogs()
+  const [confirmClear, setConfirmClear] = useState(false)
   const advancedCount = Object.values(advanced).filter(Boolean).length
   // Typing is debounced; clearing applies immediately
   const debouncedAdvanced = useDebouncedValue(advanced, 400)
@@ -302,9 +313,14 @@ export default function AuditLog() {
         title={t('auditLog.title')}
         description={t('auditLog.description')}
         actions={
-          <Button variant="outline" onClick={() => logs.refetch()} disabled={logs.isFetching}>
-            <RefreshCw className={cn(logs.isFetching && 'animate-spin')} /> {t('common.refresh')}
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => logs.refetch()} disabled={logs.isFetching}>
+              <RefreshCw className={cn(logs.isFetching && 'animate-spin')} /> {t('common.refresh')}
+            </Button>
+            <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmClear(true)}>
+              <Trash2 /> {t('common.clear')}
+            </Button>
+          </>
         }
       />
 
@@ -448,6 +464,25 @@ export default function AuditLog() {
         value={advanced}
         onChange={withReset(setAdvanced)}
         total={logs.isFetching ? undefined : pg?.total}
+      />
+
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title={t('auditLog.clearTitle')}
+        description={t('auditLog.clearDescription')}
+        confirmLabel={t('heartbeatLog.deletePermanently')}
+        loading={clear.isPending}
+        onConfirm={() =>
+          clear.mutate(undefined, {
+            onSuccess: ({ deletedCount }) => {
+              toast.success(t('heartbeatLog.deletedEntries', { count: deletedCount }))
+              setConfirmClear(false)
+              setPage(1)
+            },
+            onError: (error) => toast.error(getErrorMessage(error)),
+          })
+        }
       />
     </>
   )

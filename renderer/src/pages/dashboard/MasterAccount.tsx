@@ -5,6 +5,8 @@ import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { CloseBrowserDialog, LaunchBrowserDialog } from '@/components/system/BrowserLauncher'
+import { BrowserTrafficFeed } from '@/components/shared/BrowserTrafficFeed'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -21,6 +23,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { useBrowserStatus } from '@/hooks/useBrowserAutomation'
 import { useDateLocale } from '@/hooks/useDateLocale'
 import { useCreateMaster, useDeleteMaster, useMasterAccount, useMasterStatus, useUpdateMaster } from '@/hooks/useMasterAccount'
 import { masterSchema, type MasterFormValues } from '@/lib/validators'
@@ -154,9 +157,12 @@ function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void 
   const { t } = useTranslation()
   const locale = useDateLocale()
   const status = useMasterStatus(true)
+  const browser = useBrowserStatus()
   const del = useDeleteMaster()
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const running = status.data?.running ?? false
+  const [launchOpen, setLaunchOpen] = useState(false)
+  const [closeOpen, setCloseOpen] = useState(false)
+  const running = browser.data?.running ?? false
   const lastBetAt = status.data?.lastBetAt ?? master.lastBetAt
 
   return (
@@ -185,7 +191,7 @@ function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void 
             <div>
               <dt className="text-sm text-muted-foreground">{t('masterAccount.listener')}</dt>
               <dd className="mt-1">
-                {status.isLoading ? <Skeleton className="h-6 w-20" /> : <Badge variant={running ? 'success' : 'secondary'}>{running ? t('masterAccount.running') : t('masterAccount.stopped')}</Badge>}
+                {browser.isLoading ? <Skeleton className="h-6 w-20" /> : <Badge variant={running ? 'success' : 'secondary'}>{running ? t('masterAccount.running') : t('masterAccount.stopped')}</Badge>}
               </dd>
             </div>
             <div>
@@ -198,24 +204,32 @@ function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void 
             </div>
           </dl>
           {master.notes && <p className="text-sm text-muted-foreground">{master.notes}</p>}
-          {status.isError && (
+          {browser.isError && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>{t('masterAccount.listenerStatusFailed', { error: getErrorMessage(status.error) })}</AlertDescription>
+              <AlertDescription>{t('masterAccount.listenerStatusFailed', { error: getErrorMessage(browser.error) })}</AlertDescription>
             </Alert>
           )}
           <Separator />
           <div className="flex flex-wrap items-center gap-2">
-            <Button disabled>
-              <Play /> {t('masterAccount.startListener')}
-            </Button>
-            <Button variant="outline" disabled>
-              <Square /> {t('masterAccount.stopListener')}
-            </Button>
-            <span className="text-sm text-muted-foreground">{t('masterAccount.listenerComingLater')}</span>
+            {running ? (
+              <Button variant="outline" onClick={() => setCloseOpen(true)}>
+                <Square /> {t('masterAccount.stopListener')}
+              </Button>
+            ) : (
+              <Button onClick={() => setLaunchOpen(true)} disabled={!browser.data}>
+                <Play /> {t('masterAccount.startListener')}
+              </Button>
+            )}
+            <span className="text-sm text-muted-foreground">{t('masterAccount.listenerHint')}</span>
           </div>
+          {/* The browser window itself floats above every page (see FloatingMasterBrowser in
+              DashboardLayout) — this is just its captured traffic. */}
+          {running && <BrowserTrafficFeed />}
         </CardContent>
       </Card>
+      <LaunchBrowserDialog open={launchOpen} onOpenChange={setLaunchOpen} />
+      <CloseBrowserDialog open={closeOpen} onOpenChange={setCloseOpen} />
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}

@@ -4,7 +4,12 @@ const killSwitch = require('../services/killSwitchService');
 const heartbeatScheduler = require('../services/heartbeatScheduler');
 
 function snapshot() {
-    return { settings: systemSettingsService.get(), killSwitch: killSwitch.status(), runningHeartbeats: heartbeatScheduler.runningCount() };
+    return {
+        settings: systemSettingsService.get(),
+        killSwitch: killSwitch.status(),
+        copyBetting: systemSettingsService.getCopyBetting(),
+        runningHeartbeats: heartbeatScheduler.runningCount()
+    };
 }
 
 function register(router) {
@@ -25,6 +30,20 @@ function register(router) {
         const result = await killSwitch.release();
         audit({ meta: { restartedHeartbeats: result.restartedHeartbeats } });
         return { ...snapshot(), ...result };
+    });
+
+    // Independent of the kill switch — gates whether a detected master bet actually gets
+    // replicated to sub-accounts. Opening the master browser never implies this is on.
+    router.handle('POST /system/copy-betting/arm', ({ audit }) => {
+        systemSettingsService.setCopyBetting({ armed: true, armedAt: new Date().toISOString() });
+        audit({});
+        return snapshot();
+    });
+
+    router.handle('POST /system/copy-betting/disarm', ({ audit }) => {
+        systemSettingsService.setCopyBetting({ armed: false, disarmedAt: new Date().toISOString() });
+        audit({});
+        return snapshot();
     });
 }
 

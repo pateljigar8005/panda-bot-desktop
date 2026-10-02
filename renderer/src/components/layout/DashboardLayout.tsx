@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { useUiStore } from '@/store/uiStore'
+import { CopyBettingBanner } from '@/components/system/CopyBetting'
+import { FloatingMasterBrowser } from '@/components/system/FloatingMasterBrowser'
 import { KillSwitchBanner } from '@/components/system/KillSwitch'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
@@ -36,10 +38,13 @@ export function DashboardLayout() {
       <div className={cn('transition-[padding] duration-200', collapsed ? 'md:pl-16' : 'md:pl-64')}>
         <Topbar onOpenMobileNav={() => setMobileOpen(true)} />
         <KillSwitchBanner />
+        <CopyBettingBanner />
         <main className="w-full space-y-6 p-4 md:p-6">
           <Outlet />
         </main>
       </div>
+
+      <FloatingMasterBrowser />
     </div>
   )
 }

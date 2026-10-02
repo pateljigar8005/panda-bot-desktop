@@ -236,23 +236,101 @@ export interface MasterStatus {
   status: string
 }
 
-// ---------- Bets / audit / realtime (later phases) ----------
+// ---------- Master browser (Playwright) ----------
+export interface BrowserStatus {
+  running: boolean
+  startedAt: number | null
+}
+
+/** One yewu* request/response captured from the master browser session. */
+export interface BrowserTrafficLog {
+  _id: string
+  url: string
+  method: string
+  endpoint: string | null
+  statusCode: number | null
+  requestPayload: Record<string, unknown> | null
+  responseBody: unknown
+  isBetOrder: boolean
+  createdAt: string
+}
+
+export interface BrowserTrafficParams {
+  rangeMinutes?: number
+  endpoint?: string
+  isBetOrder?: boolean
+  q?: string
+  sort?: 'newest' | 'oldest'
+  page?: number
+  limit?: number
+}
+
+export interface BrowserTrafficPage {
+  traffic: BrowserTrafficLog[]
+  pagination: Pagination
+  endpoints: string[]
+  rangeMinutes: number
+  sort: 'newest' | 'oldest'
+}
+
+// ---------- Bets (copy-betting history) ----------
 export type BetStatus = 'captured' | 'executed' | 'failed' | 'skipped'
 
+/**
+ * One leg of a copy-bet: either the master's own detected bet (accountType 'master', accountId
+ * null) or one sub-account's replica of it — every row sharing a masterBetId is one copy-bet run.
+ */
 export interface BetLog {
-  id: string
-  accountId: string
-  accountUsername?: string
-  event: string
-  market: string
-  selection: string
-  odds: number
-  stake: number
+  _id: string
+  masterBetId: string
+  accountType: 'master' | 'sub'
+  accountId: string | null
+  accountName: string | null
   status: BetStatus
-  error?: string | null
-  capturedAt: string
-  executedAt: string | null
+  skipReason: string | null
+  matchName: string | null
+  marketValue: string | null
+  selection: string | null
+  odds: number | null
+  stake: number | null
+  responseCode: string | null
+  errorMessage: string | null
+  requestPayload: Record<string, unknown> | null
+  responseBody: unknown
+  createdAt: string
 }
+
+export interface BetLogParams {
+  rangeMinutes?: number
+  masterBetId?: string
+  accountId?: string
+  status?: BetStatus
+  sort?: 'newest' | 'oldest'
+  page?: number
+  limit?: number
+}
+
+export interface BetLogPage {
+  bets: BetLog[]
+  pagination: Pagination
+  stats: { total: number; executed: number; failed: number; skipped: number }
+  rangeMinutes: number
+  sort: 'newest' | 'oldest'
+}
+
+/** Sub-account copy-bet outcomes bucketed over time, for the Overview dashboard chart. */
+export interface BetChartBucket {
+  time: string
+  executed: number
+  failed: number
+  skipped: number
+}
+
+export interface BetChart {
+  buckets: BetChartBucket[]
+  rangeHours: number
+}
+
 /** One state-changing request (GET /audit-logs). Append-only. */
 export interface AuditLog {
   _id: string
@@ -309,6 +387,8 @@ export const SOCKET_EVENTS = [
   'account:status',
   'system:alert',
   'kill-switch:activated',
+  'browser:status',
+  'browser:traffic',
 ] as const
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[number]
@@ -332,9 +412,17 @@ export interface KillSwitchState {
   releasedAt: string | null
 }
 
+/** Independent of the kill switch — gates whether a detected master bet gets replicated. */
+export interface CopyBettingState {
+  armed: boolean
+  armedAt: string | null
+  disarmedAt: string | null
+}
+
 export interface SystemStatus {
   settings: SystemSettings
   killSwitch: KillSwitchState
+  copyBetting: CopyBettingState
   runningHeartbeats: number
 }
 

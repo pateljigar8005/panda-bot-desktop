@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('panda', {
         const listener = (_event, envelope) => callback(envelope);
         ipcRenderer.on('panda:event', listener);
         return () => ipcRenderer.removeListener('panda:event', listener);
-    }
+    },
+    /** Fire-and-forget: where the embedded master browser view should be drawn, in window-content pixels. */
+    setBrowserBounds: (bounds) => ipcRenderer.send('panda:browser-bounds', bounds)
 });

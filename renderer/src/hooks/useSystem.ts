@@ -12,7 +12,7 @@ function useSystemMutation<TVars, TResult extends SystemStatus>(fn: (vars: TVars
   return useMutation({
     mutationFn: fn,
     onSuccess: (status) => {
-      queryClient.setQueryData(statusKey, { settings: status.settings, killSwitch: status.killSwitch, runningHeartbeats: status.runningHeartbeats })
+      queryClient.setQueryData(statusKey, { settings: status.settings, killSwitch: status.killSwitch, copyBetting: status.copyBetting, runningHeartbeats: status.runningHeartbeats })
       // Account heartbeat state changes with the kill switch
       void queryClient.invalidateQueries({ queryKey: ['accounts'] })
     },
@@ -22,3 +22,5 @@ function useSystemMutation<TVars, TResult extends SystemStatus>(fn: (vars: TVars
 export const useUpdateSystemSettings = () => useSystemMutation((payload: Partial<SystemSettings>) => systemService.updateSettings(payload))
 export const useActivateKillSwitch = () => useSystemMutation((reason: string | undefined) => systemService.activateKillSwitch(reason))
 export const useReleaseKillSwitch = () => useSystemMutation(() => systemService.releaseKillSwitch())
+export const useArmCopyBetting = () => useSystemMutation(() => systemService.armCopyBetting())
+export const useDisarmCopyBetting = () => useSystemMutation(() => systemService.disarmCopyBetting())

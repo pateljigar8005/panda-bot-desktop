@@ -177,7 +177,53 @@ const MIGRATIONS = [
     // Desktop app, single local user, OS-keychain-protected data folder is out of scope for this
     // threat model: stop encrypting platform credentials at rest. (Proxy passwords are
     // unrelated and stay encrypted — see encryptionService.)
-    migrateCredentialsToPlain
+    migrateCredentialsToPlain,
+    // Raw yewu* traffic captured from the master account's embedded browser session (see
+    // browserAutomation.js). No accountId/FK: the master lives in its own master_account table
+    // with no shared id space, and this is a single-purpose, single-stream table.
+    `
+    CREATE TABLE browser_traffic_logs (
+        _id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        method TEXT NOT NULL,
+        endpoint TEXT,
+        statusCode INTEGER,
+        requestPayload TEXT,
+        responseBody TEXT,
+        isBetOrder INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL
+    );
+    CREATE INDEX browser_traffic_logs_time ON browser_traffic_logs (createdAt);
+    CREATE INDEX browser_traffic_logs_endpoint ON browser_traffic_logs (endpoint);
+    `,
+    // One row per leg of a copy-bet: the master's own detected bet (accountType 'master',
+    // accountId null) plus one row per sub-account it was (or wasn't) replicated to, all sharing
+    // masterBetId so they can be grouped. accountId has no ON DELETE CASCADE on purpose — a bet's
+    // history should outlive the account being deleted later, same reasoning as audit_logs.
+    `
+    CREATE TABLE bet_logs (
+        _id TEXT PRIMARY KEY,
+        masterBetId TEXT NOT NULL,
+        accountType TEXT NOT NULL,
+        accountId TEXT REFERENCES accounts(_id),
+        accountName TEXT,
+        status TEXT NOT NULL,
+        skipReason TEXT,
+        matchName TEXT,
+        marketValue TEXT,
+        selection TEXT,
+        odds REAL,
+        stake REAL,
+        responseCode TEXT,
+        errorMessage TEXT,
+        requestPayload TEXT,
+        responseBody TEXT,
+        createdAt TEXT NOT NULL
+    );
+    CREATE INDEX bet_logs_master ON bet_logs (masterBetId);
+    CREATE INDEX bet_logs_account_time ON bet_logs (accountId, createdAt);
+    CREATE INDEX bet_logs_time ON bet_logs (createdAt);
+    `
 ];
 
 function migrate() {

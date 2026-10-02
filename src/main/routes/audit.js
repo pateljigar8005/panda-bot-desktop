@@ -67,6 +67,13 @@ function register(router) {
         const actions = db.get().prepare('SELECT DISTINCT action FROM audit_logs').all().map((r) => r.action).filter(Boolean).sort();
         return { actions };
     });
+
+    // Permanently deletes every audit log entry. This request's own entry (audit_log_cleared) is
+    // written fresh afterward by the router's audit hook, so one row always survives a clear.
+    router.handle('DELETE /audit-logs', () => {
+        const deletedCount = AuditLogs.remove('1', []);
+        return { success: true, deletedCount };
+    });
 }
 
 module.exports = { register };

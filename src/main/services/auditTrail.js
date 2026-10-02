@@ -29,8 +29,15 @@ const ACTIONS = {
     'PUT /system/settings': 'system_settings_updated',
     'POST /system/kill-switch': 'kill_switch_activated',
     'POST /system/kill-switch/release': 'kill_switch_released',
+    'POST /system/copy-betting/arm': 'copy_betting_armed',
+    'POST /system/copy-betting/disarm': 'copy_betting_disarmed',
 
-    'DELETE /heartbeat-logs': 'activity_log_cleared'
+    'DELETE /heartbeat-logs': 'activity_log_cleared',
+    'DELETE /audit-logs': 'audit_log_cleared',
+
+    'POST /browser/launch': 'browser_launched',
+    'POST /browser/close': 'browser_closed',
+    'DELETE /browser/traffic': 'browser_traffic_cleared'
 };
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -89,10 +96,10 @@ function recordRequest({ method, route, params, body, response, audit, durationM
 }
 
 /** Something the app did by itself (e.g. putting an account on hold). */
-function recordSystemAction(action, { account, meta } = {}) {
+function recordSystemAction(action, { account, meta, success = true } = {}) {
     write({
         action,
-        success: true,
+        success,
         resourceType: account ? 'account' : null,
         resourceId: account ? String(account._id) : null,
         resourceName: account?.name || null,

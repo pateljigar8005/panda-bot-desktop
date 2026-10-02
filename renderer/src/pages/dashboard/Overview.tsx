@@ -1,7 +1,8 @@
 import { CheckCircle2, Network, Radio, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { format } from 'date-fns'
 import { PlaceholderCard } from '@/components/shared/PlaceholderCard'
 import { StatCard } from '@/components/shared/StatCard'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -10,18 +11,25 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { RelativeTime } from '@/components/shared/RelativeTime'
 import { useAccounts } from '@/hooks/useAccounts'
+import { useBetsChart } from '@/hooks/useBets'
+import { useDateLocale } from '@/hooks/useDateLocale'
 import { useMasterAccount } from '@/hooks/useMasterAccount'
 import { useProxies } from '@/hooks/useProxies'
-import { mockChart } from '@/lib/mockData'
+
+const CHART_RANGE_HOURS = 24
 
 export default function Overview() {
   const { t } = useTranslation()
+  const locale = useDateLocale()
   const recent = useAccounts({ page: 1, limit: 5 })
   const active = useAccounts({ page: 1, limit: 1, status: 'active' })
   const proxies = useProxies({ page: 1, limit: 1 })
   const master = useMasterAccount()
+  const chart = useBetsChart(CHART_RANGE_HOURS)
 
   const num = (n?: number) => (n === undefined ? '—' : String(n))
+  const chartData = (chart.data?.buckets ?? []).map((b) => ({ ...b, label: format(new Date(b.time), 'HH:mm', { locale }) }))
+  const hasActivity = chartData.some((b) => b.executed || b.failed || b.skipped)
 
   return (
     <>
@@ -41,22 +49,31 @@ export default function Overview() {
 
       <PlaceholderCard title={t('overview.activity')} description={t('overview.activityDescription')}>
         <div className="h-72 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={mockChart} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip
-                contentStyle={{
-                  background: 'hsl(var(--popover))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 'var(--radius)',
-                  color: 'hsl(var(--popover-foreground))',
-                }}
-              />
-              <Line type="monotone" dataKey="bets" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+          {chart.isLoading ? (
+            <Skeleton className="h-full w-full" />
+          ) : !hasActivity ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t('overview.noActivityYet')}</div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    background: 'hsl(var(--popover))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: 'var(--radius)',
+                    color: 'hsl(var(--popover-foreground))',
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line type="monotone" name={t('betStatus.executed')} dataKey="executed" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                <Line type="monotone" name={t('betStatus.failed')} dataKey="failed" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
+                <Line type="monotone" name={t('betStatus.skipped')} dataKey="skipped" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </PlaceholderCard>
 

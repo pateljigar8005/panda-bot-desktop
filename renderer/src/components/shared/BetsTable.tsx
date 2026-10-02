@@ -1,20 +1,23 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { format } from 'date-fns'
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { formatAmount } from '@/lib/betSizing'
+import { RelativeTime } from '@/components/shared/RelativeTime'
 import { useDateLocale } from '@/hooks/useDateLocale'
 import type { BetLog } from '@/types'
 import { BetStatusBadge } from './BetStatusBadge'
-import { DataTable } from './DataTable'
+import { DataTable, type ServerPagination } from './DataTable'
 
 interface BetsTableProps {
   data: BetLog[]
   loading?: boolean
   /** Plain table without search, filters or pagination (e.g. dashboard preview). */
   compact?: boolean
+  serverPagination?: ServerPagination
+  toolbarLeft?: ReactNode
 }
 
-export function BetsTable({ data, loading, compact }: BetsTableProps) {
+export function BetsTable({ data, loading, compact, serverPagination, toolbarLeft }: BetsTableProps) {
   const { t } = useTranslation()
   const locale = useDateLocale()
 
@@ -27,19 +30,45 @@ export function BetsTable({ data, loading, compact }: BetsTableProps) {
   ]
   const columns: ColumnDef<BetLog>[] = useMemo(
     () => [
-      { accessorKey: 'capturedAt', header: t('bets.columnTime'), meta: { filter: 'date' }, cell: ({ row }) => format(new Date(row.original.capturedAt), 'MMM d, HH:mm:ss', { locale }) },
-      { accessorKey: 'accountUsername', header: t('bets.columnAccount'), meta: { filter: 'select' } },
-      { accessorKey: 'event', header: t('bets.columnEvent'), meta: { filter: 'text' } },
-      { accessorKey: 'selection', header: t('bets.columnSelection'), meta: { filter: 'text' } },
-      { accessorKey: 'odds', header: t('bets.columnOdds'), meta: { filter: 'number' }, cell: ({ row }) => row.original.odds.toFixed(2) },
-      { accessorKey: 'stake', header: t('bets.columnStake'), meta: { filter: 'number' }, cell: ({ row }) => `$${row.original.stake.toFixed(2)}` },
-      { accessorKey: 'status', header: t('bets.columnStatus'), meta: { filter: 'select', options: BET_STATUS_OPTIONS }, cell: ({ row }) => <BetStatusBadge status={row.original.status} /> },
+      { accessorKey: 'createdAt', header: t('bets.columnTime'), meta: { filter: 'date' }, cell: ({ row }) => <RelativeTime iso={row.original.createdAt} showExact /> },
+      {
+        accessorKey: 'accountName',
+        header: t('bets.columnAccount'),
+        meta: { filter: 'select' },
+        cell: ({ row }) => row.original.accountName ?? (row.original.accountType === 'master' ? t('bets.master') : '—'),
+      },
+      { accessorKey: 'matchName', header: t('bets.columnEvent'), meta: { filter: 'text' }, cell: ({ row }) => row.original.matchName ?? '—' },
+      { accessorKey: 'selection', header: t('bets.columnSelection'), meta: { filter: 'text' }, cell: ({ row }) => row.original.selection ?? '—' },
+      { accessorKey: 'odds', header: t('bets.columnOdds'), meta: { filter: 'number' }, cell: ({ row }) => (row.original.odds != null ? formatAmount(row.original.odds) : '—') },
+      { accessorKey: 'stake', header: t('bets.columnStake'), meta: { filter: 'number' }, cell: ({ row }) => (row.original.stake != null ? formatAmount(row.original.stake) : '—') },
+      {
+        accessorKey: 'status',
+        header: t('bets.columnStatus'),
+        meta: { filter: 'select', options: BET_STATUS_OPTIONS },
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-0.5">
+            <BetStatusBadge status={row.original.status} />
+            {(row.original.skipReason || row.original.errorMessage) && (
+              <span className="text-xs text-muted-foreground">{row.original.skipReason || row.original.errorMessage}</span>
+            )}
+          </div>
+        ),
+      },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, locale],
   )
 
   return (
-    <DataTable columns={columns} data={data} loading={loading} emptyMessage={t('bets.noBetsYet')} toolbar={!compact} pagination={!compact} />
+    <DataTable
+      columns={columns}
+      data={data}
+      loading={loading}
+      emptyMessage={t('bets.noBetsYet')}
+      toolbar={!compact}
+      pagination={!compact}
+      toolbarLeft={toolbarLeft}
+      serverPagination={serverPagination}
+    />
   )
 }

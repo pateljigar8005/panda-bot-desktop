@@ -105,7 +105,7 @@ test('headers on the wire match the real client: same names, same order, content
         assert.equal(headers['sec-ch-ua'], '"Chromium";v="153", "Not_A Brand";v="8"');
         assert.equal(headers['sec-ch-ua-platform'], '"Android"');
         assert.equal(headers.accept, 'application/json, text/plain, */*');
-        assert.match(headers.checkid, new RegExp(`^pc-[0-9a-f]{32}-${SID}-\\d+$`));
+        assert.match(headers.checkid, new RegExp(`^pc-[0-9a-f]{32}-${account.uid}-\\d+$`));
         assert.equal(headers.origin, undefined);
         assert.equal(headers['accept-language'], undefined);
     }

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { SelectField } from '@/components/shared/SelectField'
 import { AutomationSettingsCard } from '@/components/system/AutomationSettingsCard'
+import { CopyBettingCard } from '@/components/system/CopyBetting'
 import { KillSwitchCard } from '@/components/system/KillSwitch'
 import { PlaceholderCard } from '@/components/shared/PlaceholderCard'
 import { Button } from '@/components/ui/button'
@@ -67,6 +68,7 @@ export default function Settings() {
 
         <TabsContent value="automation" className="space-y-6">
           <KillSwitchCard />
+          <CopyBettingCard />
           <AutomationSettingsCard />
         </TabsContent>
       </Tabs>

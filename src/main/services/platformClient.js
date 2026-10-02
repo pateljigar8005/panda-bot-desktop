@@ -31,12 +31,12 @@ const http = axios.create();
 delete http.defaults.headers.common.Accept;
 delete http.defaults.headers.common['Content-Type'];
 
-function buildHeaders(token, sid, deviceId, method = 'POST') {
+function buildHeaders(token, uid, deviceId, method = 'POST') {
     const isIOS = deviceId === '1';
     const headers = {
         'sec-ch-ua-platform': isIOS ? '"iOS"' : '"Android"',
         'lang': 'zh',
-        'checkid': generateCheckId(sid),
+        'checkid': generateCheckId(uid),
         'sec-ch-ua': SEC_CH_UA,
         'request-code': '{"panda-bss-source":"1"}',
         'referer': `${WEB_ORIGIN}/`,
@@ -191,7 +191,7 @@ async function fetchUserInfo(uid, token, deviceId, proxy = null) {
  * Send one heartbeat
  */
 async function sendHeartbeat(account) {
-    const { token, sessionId, sid, mc } = account;
+    const { token, sessionId, sid, mc, uid } = account;
     const sign = generateHeartbeatSign(sid, mc, account.uid);
     const timestamp = Date.now();
 
@@ -216,7 +216,7 @@ async function sendHeartbeat(account) {
             `${apiBase}${HEARTBEAT_ENDPOINT}?t=${timestamp}`,
             payload,
             {
-                headers: buildHeaders(token, sid, account.deviceId),
+                headers: buildHeaders(token, uid, account.deviceId),
                 timeout: 10000,
                 ...axiosProxyOptions(proxy)
             }
@@ -252,13 +252,13 @@ async function fetchBalance(account) {
     const timestamp = Date.now();
 
     try {
-        const { token, sid } = account;
+        const { token, uid } = account;
         const proxy = await getAccountProxy(account);
         const response = await http.get(
             `${await getApiBase()}/yewu12/user/amount`,
             {
-                params: { uid: account.uid, t: timestamp },
-                headers: buildHeaders(token, sid, account.deviceId, 'GET'),
+                params: { uid, t: timestamp },
+                headers: buildHeaders(token, uid, account.deviceId, 'GET'),
                 timeout: 10000,
                 ...axiosProxyOptions(proxy)
             }
@@ -295,4 +295,4 @@ async function fetchBalance(account) {
     }
 }
 
-module.exports = { http, fetchUserInfo, sendHeartbeat, fetchBalance, decodeGzip, buildHeaders, buildUserInfoHeaders };
+module.exports = { http, fetchUserInfo, sendHeartbeat, fetchBalance, decodeGzip, buildHeaders, buildUserInfoHeaders, USER_AGENTS };

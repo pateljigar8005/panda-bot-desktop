@@ -12,13 +12,20 @@ const DEFAULTS = {
 };
 
 const KILL_SWITCH_DEFAULTS = { active: false, reason: null, activatedAt: null, releasedAt: null };
+// Independent of the kill switch, and off by default (like the kill switch starts cleared): opening
+// the master browser to casually check something must never risk firing a real bet on its own.
+const COPY_BETTING_DEFAULTS = { armed: false, armedAt: null, disarmedAt: null };
 
 // Cached so hot paths (every heartbeat) read settings synchronously
 let cached = { ...DEFAULTS };
 
 function readDoc() {
     const saved = store.read('system') || {};
-    return { ...DEFAULTS, ...saved, killSwitch: { ...KILL_SWITCH_DEFAULTS, ...(saved.killSwitch || {}) } };
+    return {
+        ...DEFAULTS, ...saved,
+        killSwitch: { ...KILL_SWITCH_DEFAULTS, ...(saved.killSwitch || {}) },
+        copyBetting: { ...COPY_BETTING_DEFAULTS, ...(saved.copyBetting || {}) }
+    };
 }
 
 const pick = (doc) => Object.fromEntries(Object.keys(DEFAULTS).map((key) => [key, doc[key] ?? DEFAULTS[key]]));
@@ -52,7 +59,16 @@ function setKillSwitch(changes) {
     return doc.killSwitch;
 }
 
+const getCopyBetting = () => readDoc().copyBetting;
+
+function setCopyBetting(changes) {
+    const doc = readDoc();
+    doc.copyBetting = { ...doc.copyBetting, ...changes };
+    store.write('system', doc);
+    return doc.copyBetting;
+}
+
 /** Test helper */
 const reset = () => { cached = { ...DEFAULTS }; };
 
-module.exports = { load, get, update, getKillSwitch, setKillSwitch, DEFAULTS, reset };
+module.exports = { load, get, update, getKillSwitch, setKillSwitch, getCopyBetting, setCopyBetting, DEFAULTS, reset };

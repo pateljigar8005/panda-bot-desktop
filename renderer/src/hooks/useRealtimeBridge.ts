@@ -25,6 +25,9 @@ export function useRealtimeBridge() {
           void queryClient.invalidateQueries({ queryKey: ['activity'] })
         }
         if (name === 'kill-switch:activated') void queryClient.invalidateQueries({ queryKey: ['system', 'status'] })
+        if (name === 'browser:status') void queryClient.invalidateQueries({ queryKey: ['browser', 'status'] })
+        if (name === 'browser:traffic') void queryClient.invalidateQueries({ queryKey: ['browser', 'traffic'] })
+        if (name === 'bet:captured' || name === 'bet:executed') void queryClient.invalidateQueries({ queryKey: ['bets'] })
       }),
     [queryClient],
   )

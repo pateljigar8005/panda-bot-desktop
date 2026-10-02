@@ -17,12 +17,21 @@ export interface PandaEventEnvelope {
   at: number
 }
 
+export interface BrowserBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 declare global {
   interface Window {
     panda: {
       request: <T = unknown>(request: PandaRequest) => Promise<PandaResponse<T>>
       /** Subscribe to live events. Returns an unsubscribe function. */
       onEvent: (callback: (envelope: PandaEventEnvelope) => void) => () => void
+      /** Fire-and-forget: where the embedded master browser view should be drawn. */
+      setBrowserBounds: (bounds: BrowserBounds) => void
     }
   }
 }

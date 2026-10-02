@@ -3,13 +3,15 @@ const config = require('../config');
 
 /**
  * Generate a checkId for API requests
- * Format: pc-<32 hex random>-<sid>-<timestamp_ms>
- * (the real client's third segment is sid, not uid — confirmed against full_session_log.txt:14)
+ * Format: pc-<32 hex random>-<uid>-<timestamp_ms>
+ * Of 336 checkid headers in full_session_log.txt, only the first 3 (fired before the client's
+ * own uid is known yet, i.e. before getUserInfoPB resolves) use sid in this slot — every other
+ * request, including the real captured betPB, uses the account's uid.
  */
-function generateCheckId(sid) {
+function generateCheckId(uid) {
     const uuid = crypto.randomBytes(16).toString('hex');
     const timestamp = Date.now();
-    return `pc-${uuid}-${sid}-${timestamp}`;
+    return `pc-${uuid}-${uid}-${timestamp}`;
 }
 
 /**

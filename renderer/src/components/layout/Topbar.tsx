@@ -8,6 +8,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { BrowserLauncherTopbarButton } from '@/components/system/BrowserLauncher'
 import { KillSwitchTopbarButton } from '@/components/system/KillSwitch'
 import { useUiStore, type Theme } from '@/store/uiStore'
 
@@ -28,6 +29,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
 
       <div className="flex-1" />
 
+      <BrowserLauncherTopbarButton />
       <KillSwitchTopbarButton />
 
       <DropdownMenu>
