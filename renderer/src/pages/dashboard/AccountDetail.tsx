@@ -204,7 +204,7 @@ export default function AccountDetail() {
             </CardHeader>
             <CardContent>
               <dl className="divide-y">
-                <Row label={t('accountForm.betMode')}><span className="capitalize">{account.betMode}</span></Row>
+                <Row label={t('accountForm.betMode')}>{t(account.betMode === 'fixed' ? 'accounts.betModeFixed' : 'accounts.betModeProportional')}</Row>
                 {account.betMode === 'fixed' ? (
                   <Row label={t('accountForm.fixedAmount')}>{account.fixedAmount}</Row>
                 ) : (

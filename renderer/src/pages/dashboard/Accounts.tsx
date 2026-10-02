@@ -90,7 +90,7 @@ export default function Accounts() {
       { accessorKey: 'uid', header: t('accounts.columnUid'), meta: { filter: 'text' } },
       { id: 'device', accessorFn: (row) => deviceLabel(row.deviceId), header: t('accounts.columnDevice'), meta: { filter: 'select', options: DEVICE_OPTIONS } },
       { accessorKey: 'status', header: t('accounts.columnStatus'), meta: { filter: 'select', options: STATUS_OPTIONS }, cell: ({ row }) => <StatusBadge status={row.original.status} /> },
-      { accessorKey: 'betMode', header: t('accounts.columnBetMode'), meta: { filter: 'select', options: BET_MODE_OPTIONS }, cell: ({ row }) => <span className="capitalize">{row.original.betMode}</span> },
+      { accessorKey: 'betMode', header: t('accounts.columnBetMode'), meta: { filter: 'select', options: BET_MODE_OPTIONS }, cell: ({ row }) => t(row.original.betMode === 'fixed' ? 'accounts.betModeFixed' : 'accounts.betModeProportional') },
       {
         id: 'lastHeartbeatAt',
         accessorFn: (row) => row.lastHeartbeatAt,

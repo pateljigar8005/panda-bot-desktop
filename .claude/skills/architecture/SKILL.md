@@ -16,7 +16,7 @@ React UI). It is now **one desktop app for Windows and macOS; everything runs on
   to the dashboard. Audit entries are "You" (user action) or "System" (automatic).
 - **Platform credentials (token/sid/mc/sessionId) are stored in plain**, not encrypted at rest:
   single local user, no server, no multi-tenant isolation to protect — `encryptionService` +
-  the OS-keychain key (`safeStorage`) stay in place only for proxy and SMTP passwords.
+  the OS-keychain key (`safeStorage`) stay in place only for proxy passwords.
 - **Local storage: SQLite** (single file in the user-data folder) instead of MongoDB.
 - **No Redis / BullMQ.** Kill-switch flag lives in SQLite + memory; jobs use an in-process,
   per-account queue.
@@ -53,7 +53,7 @@ over IPC (the old socket.io connection is gone).
 
 Reuse almost as-is in `src/main/`: platformClient, signatureService, encryptionService (key source
 changes), apiDomainService, heartbeatScheduler, killSwitchService, systemSettingsService,
-notificationService/emailService, proxyService, tokenUrlService.
+proxyService, tokenUrlService.
 Rewrite: Mongoose models → SQLite data layer; Express controllers → router handlers (drop
 `req`/`res`, keep validation and rules).
 Drop: Express, middleware (helmet, CORS, rate limits), auth, socket.io, Redis, BullMQ, docker-compose.

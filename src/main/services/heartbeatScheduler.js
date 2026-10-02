@@ -1,7 +1,6 @@
 const db = require('../db');
 const { Accounts, HeartbeatLogs, isOperational } = require('../models');
 const { sendHeartbeat } = require('./platformClient');
-const notificationService = require('./notificationService');
 const { recordSystemAction } = require('./auditTrail');
 const systemSettings = require('./systemSettingsService');
 const killSwitch = require('./killSwitchService');
@@ -15,6 +14,11 @@ const logger = require('../logger');
 const activeTimers = new Map();
 
 const isCurrent = (id, run) => activeTimers.get(id) === run;
+
+// Every beat() currently awaiting the platform (request sent, no response yet). Tracked so a
+// signal/quit shutdown can give these a moment to finish and log their result instead of cutting
+// the socket mid-request — see waitForIdle().
+const inFlight = new Set();
 
 function logHeartbeat(account, entry) {
     try {
@@ -101,7 +105,6 @@ async function beat(id, run) {
 
     if (expired) {
         activeTimers.delete(id);
-        void notificationService.notify('tokenExpired', fresh, `The platform rejected the token (${reason}). Heartbeats stopped; paste a fresh token URL on the Edit page.`);
         return;
     }
 
@@ -113,12 +116,10 @@ async function beat(id, run) {
         if (putOnHold(fresh, holdReason)) {
             activeTimers.delete(id);
             recordSystemAction('account_auto_held', { account: fresh, meta: { consecutiveFailures: counts.consecutiveFailures, lastError: reason } });
-            void notificationService.notify('accountOnHold', fresh, `${holdReason}. No requests are sent until you resume it (Activate).`);
             return;
         }
     }
 
-    void notificationService.onHeartbeatFailure(fresh, counts.consecutiveFailures, reason);
     scheduleNext(id, run);
 }
 
@@ -130,10 +131,12 @@ function nextDelay() {
 
 function scheduleNext(id, run) {
     run.timer = setTimeout(() => {
-        beat(id, run).catch((err) => {
+        const tick = beat(id, run).catch((err) => {
             logger.error(`Heartbeat loop crashed for account ${id}`, err.message);
             if (isCurrent(id, run)) scheduleNext(id, run); // never let one bad tick kill the loop
         });
+        inFlight.add(tick);
+        tick.finally(() => inFlight.delete(tick));
     }, nextDelay());
 }
 
@@ -191,4 +194,16 @@ function stopAll() {
 /** Number of running heartbeat loops. */
 const runningCount = () => activeTimers.size;
 
-module.exports = { startAccount, stopAccount, startAll, stopAll, runningCount };
+/**
+ * Resolve once every beat currently talking to the platform has finished (and logged its result),
+ * or after timeoutMs, whichever comes first. For shutdown: stopAll()/the kill switch only cancel
+ * *future* ticks — a request already in flight keeps running until it resolves or the process dies
+ * out from under it, so give it a bounded window to land cleanly first.
+ */
+function waitForIdle(timeoutMs) {
+    if (inFlight.size === 0) return Promise.resolve();
+    const timeout = new Promise((resolve) => setTimeout(resolve, timeoutMs));
+    return Promise.race([Promise.allSettled([...inFlight]), timeout]);
+}
+
+module.exports = { startAccount, stopAccount, startAll, stopAll, runningCount, waitForIdle };

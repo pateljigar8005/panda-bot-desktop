@@ -40,7 +40,7 @@ function masterJSON(master) {
     };
 }
 
-// Proxy/SMTP passwords are unrelated to platform credentials and stay encrypted at rest.
+// Proxy passwords are unrelated to platform credentials and stay encrypted at rest.
 const proxyJSON = (proxy) => (proxy ? { ...proxy, passwordEncrypted: mask(proxy.passwordEncrypted) } : null);
 
 module.exports = { Accounts, Proxies, Master, HeartbeatLogs, AuditLogs, isOperational, accountJSON, masterJSON, proxyJSON };

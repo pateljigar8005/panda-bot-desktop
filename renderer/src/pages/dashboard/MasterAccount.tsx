@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { format, formatDistanceToNow } from 'date-fns'
+import { format } from 'date-fns'
 import { AlertTriangle, Pencil, Play, Plus, Radio, Square, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { RelativeTime } from '@/components/shared/RelativeTime'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +21,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { useDateLocale } from '@/hooks/useDateLocale'
 import { useCreateMaster, useDeleteMaster, useMasterAccount, useMasterStatus, useUpdateMaster } from '@/hooks/useMasterAccount'
 import { masterSchema, type MasterFormValues } from '@/lib/validators'
 import { ApiError, getErrorMessage } from '@/services/api'
@@ -150,6 +152,7 @@ function MasterForm({ master, onDone }: { master?: Master; onDone: () => void })
 
 function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void }) {
   const { t } = useTranslation()
+  const locale = useDateLocale()
   const status = useMasterStatus(true)
   const del = useDeleteMaster()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -187,11 +190,11 @@ function MasterDetails({ master, onEdit }: { master: Master; onEdit: () => void 
             </div>
             <div>
               <dt className="text-sm text-muted-foreground">{t('masterAccount.lastBet')}</dt>
-              <dd className="mt-1 text-sm font-medium">{lastBetAt ? formatDistanceToNow(new Date(lastBetAt), { addSuffix: true }) : '—'}</dd>
+              <dd className="mt-1 text-sm font-medium">{lastBetAt ? <RelativeTime iso={lastBetAt} /> : '—'}</dd>
             </div>
             <div>
               <dt className="text-sm text-muted-foreground">{t('masterAccount.createdLabel')}</dt>
-              <dd className="mt-1 text-sm font-medium">{format(new Date(master.createdAt), 'PP')}</dd>
+              <dd className="mt-1 text-sm font-medium">{format(new Date(master.createdAt), 'PP', { locale })}</dd>
             </div>
           </dl>
           {master.notes && <p className="text-sm text-muted-foreground">{master.notes}</p>}

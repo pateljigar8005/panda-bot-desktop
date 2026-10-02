@@ -93,5 +93,5 @@ Signatures (`signatureService`):
 
 `requestid`/`token`, `sid`, `mc`, `sessionId`, `sign`, `code` (= mc) are secrets: never commit them.
 Stored in plain in the local SQLite file — not encrypted at rest, and the Activity/Audit logs
-store them unredacted too (local app, single user — see CLAUDE.md). Proxy and SMTP passwords are
+store them unredacted too (local app, single user — see CLAUDE.md). Proxy passwords are
 a separate category and do stay encrypted.

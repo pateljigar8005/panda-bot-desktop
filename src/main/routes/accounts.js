@@ -12,7 +12,6 @@ const { assertUidAvailable } = require('../services/accountIdentityService');
 const { fetchUserInfo, sendHeartbeat } = require('../services/platformClient');
 const { generateSid } = require('../services/signatureService');
 const heartbeatScheduler = require('../services/heartbeatScheduler');
-const notificationService = require('../services/notificationService');
 const logger = require('../logger');
 
 const UPDATABLE_FIELDS = ['name', 'deviceId', 'betMode', 'fixedAmount', 'multiplier', 'maxBetAmount', 'minBalanceThreshold', 'status', 'notes'];
@@ -86,7 +85,6 @@ function logSetupAttempt(account, attempt) {
     } catch (err) {
         logger.error('Could not write setup log', err.message);
     }
-    if (attempt.error) void notificationService.notify('setupFailed', account, `${attempt.error}. Heartbeats can't start until setup succeeds.`);
 }
 
 async function deriveCredentials(tokenUrl, deviceId, proxy) {
@@ -143,10 +141,12 @@ function register(router) {
             ...pick(body, UPDATABLE_FIELDS),
             ...credentials,
             proxyId: proxy ? proxy._id : null,
-            status: 'active'
+            // New accounts start inactive — the owner reviews setup (sid/mc, proxy) and activates
+            // it deliberately, instead of heartbeats starting the instant a token URL is pasted in.
+            status: 'inactive'
         });
         logSetupAttempt(newAccount, _setupAttempt);
-        heartbeatScheduler.startAccount(newAccount); // skipped if sid/mc couldn't be fetched
+        if (newAccount.status === 'active') heartbeatScheduler.startAccount(newAccount);
 
         audit({ resourceName: newAccount.name });
         return { account: accountJSON(newAccount) };

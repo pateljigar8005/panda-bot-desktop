@@ -2,6 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { format } from 'date-fns'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDateLocale } from '@/hooks/useDateLocale'
 import type { BetLog } from '@/types'
 import { BetStatusBadge } from './BetStatusBadge'
 import { DataTable } from './DataTable'
@@ -15,6 +16,7 @@ interface BetsTableProps {
 
 export function BetsTable({ data, loading, compact }: BetsTableProps) {
   const { t } = useTranslation()
+  const locale = useDateLocale()
 
   // Every possible bet status, so the filter offers all of them
   const BET_STATUS_OPTIONS = [
@@ -25,7 +27,7 @@ export function BetsTable({ data, loading, compact }: BetsTableProps) {
   ]
   const columns: ColumnDef<BetLog>[] = useMemo(
     () => [
-      { accessorKey: 'capturedAt', header: t('bets.columnTime'), meta: { filter: 'date' }, cell: ({ row }) => format(new Date(row.original.capturedAt), 'MMM d, HH:mm:ss') },
+      { accessorKey: 'capturedAt', header: t('bets.columnTime'), meta: { filter: 'date' }, cell: ({ row }) => format(new Date(row.original.capturedAt), 'MMM d, HH:mm:ss', { locale }) },
       { accessorKey: 'accountUsername', header: t('bets.columnAccount'), meta: { filter: 'select' } },
       { accessorKey: 'event', header: t('bets.columnEvent'), meta: { filter: 'text' } },
       { accessorKey: 'selection', header: t('bets.columnSelection'), meta: { filter: 'text' } },
@@ -34,7 +36,7 @@ export function BetsTable({ data, loading, compact }: BetsTableProps) {
       { accessorKey: 'status', header: t('bets.columnStatus'), meta: { filter: 'select', options: BET_STATUS_OPTIONS }, cell: ({ row }) => <BetStatusBadge status={row.original.status} /> },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t],
+    [t, locale],
   )
 
   return (

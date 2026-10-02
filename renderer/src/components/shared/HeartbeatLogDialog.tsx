@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useClearHeartbeatLogs, useHeartbeatLogs } from '@/hooks/useAccounts'
+import { useDateLocale } from '@/hooks/useDateLocale'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { getErrorMessage } from '@/services/api'
 import { cn } from '@/lib/utils'
@@ -78,13 +79,14 @@ function Json({ label, value }: { label: string; value: unknown }) {
 /** Request/response detail for one log entry, in its own popup instead of expanding the row. */
 function LogDetailDialog({ log, open, onOpenChange }: { log: HeartbeatLog; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation()
+  const locale = useDateLocale()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {log.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : <XCircle className="h-4 w-4 shrink-0 text-destructive" />}
-            {formatExact(log.createdAt)}
+            {formatExact(log.createdAt, locale)}
           </DialogTitle>
           {!log.success && <DialogDescription className="text-destructive">{errorText(log, t)}</DialogDescription>}
         </DialogHeader>
@@ -108,6 +110,7 @@ function LogDetailDialog({ log, open, onOpenChange }: { log: HeartbeatLog; open:
 
 export function LogEntry({ log, showAccount = false }: { log: HeartbeatLog; showAccount?: boolean }) {
   const { t } = useTranslation()
+  const locale = useDateLocale()
   const [detailOpen, setDetailOpen] = useState(false)
   const hint = log.success ? null : hintFor(log, t)
   const hasDetails = log.responseBody != null || log.requestPayload != null
@@ -118,7 +121,7 @@ export function LogEntry({ log, showAccount = false }: { log: HeartbeatLog; show
         <div className="flex items-center gap-2">
           {log.success ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" /> : <XCircle className="h-4 w-4 shrink-0 text-destructive" />}
           <time dateTime={log.createdAt} className="tabular-nums">
-            {formatExact(log.createdAt)}
+            {formatExact(log.createdAt, locale)}
           </time>
           {showAccount && log.accountName && (
             <Link to={`/accounts/${log.accountId}`} className="text-sm font-medium hover:underline">

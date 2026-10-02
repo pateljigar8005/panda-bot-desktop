@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useDateLocale } from '@/hooks/useDateLocale'
 import { useActivateKillSwitch, useReleaseKillSwitch, useSystemStatus } from '@/hooks/useSystem'
 import { getErrorMessage } from '@/services/api'
 import { cn } from '@/lib/utils'
@@ -182,6 +183,7 @@ export function KillSwitchBanner() {
 /** Settings → Automation: status, history and the controls. */
 export function KillSwitchCard() {
   const { t } = useTranslation()
+  const locale = useDateLocale()
   const status = useSystemStatus()
   const [activateOpen, setActivateOpen] = useState(false)
   const [releaseOpen, setReleaseOpen] = useState(false)
@@ -203,7 +205,7 @@ export function KillSwitchCard() {
             <OctagonX className="h-4 w-4" />
             <AlertTitle>{t('killSwitch.activeTitle')}</AlertTitle>
             <AlertDescription className="space-y-0.5">
-              {ks.activatedAt && <div>{t('killSwitch.since', { time: formatExact(ks.activatedAt) })}</div>}
+              {ks.activatedAt && <div>{t('killSwitch.since', { time: formatExact(ks.activatedAt, locale) })}</div>}
               {ks.reason && <div>{t('killSwitch.reason', { reason: ks.reason })}</div>}
             </AlertDescription>
           </Alert>
@@ -211,7 +213,7 @@ export function KillSwitchCard() {
           <div className="flex items-center gap-2 text-sm">
             <span className="h-2.5 w-2.5 rounded-full bg-success" />
             <span>{t('killSwitch.notActive', { count: status.data?.runningHeartbeats ?? 0 })}</span>
-            {ks?.releasedAt && <span className="text-muted-foreground">{t('killSwitch.lastResumed', { time: formatExact(ks.releasedAt) })}</span>}
+            {ks?.releasedAt && <span className="text-muted-foreground">{t('killSwitch.lastResumed', { time: formatExact(ks.releasedAt, locale) })}</span>}
           </div>
         )}
 

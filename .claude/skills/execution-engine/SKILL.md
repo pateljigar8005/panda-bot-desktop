@@ -15,8 +15,8 @@ description: How heartbeats and copy-betting run — heartbeat scheduler, failur
 - Success → `consecutiveFailures = 0`. Failure → `heartbeatErrors += 1` (total, reset only by "Clear log")
   and `consecutiveFailures += 1` (current streak).
 - Streak ≥ `autoHoldAfterFailures` → status `on_hold` (+ `holdReason`, `heldAt`), audit entry
-  `account_auto_held` (System), notification `accountOnHold`.
-- Expired code `0401013` (check `result.code ?? result.responseCode`) → status `expired`, notify.
+  `account_auto_held` (System).
+- Expired code `0401013` (check `result.code ?? result.responseCode`) → status `expired`.
 - Every log entry records `apiBase` + `endpoint` + the real request/response (not redacted — local app, single user).
 
 ## Copy-betting (to build)

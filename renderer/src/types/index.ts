@@ -313,35 +313,6 @@ export const SOCKET_EVENTS = [
 
 export type SocketEventName = (typeof SOCKET_EVENTS)[number]
 
-// ---------- Settings ----------
-export type SmtpSecurity = 'starttls' | 'ssl' | 'none'
-export type NotificationEvent = 'tokenExpired' | 'heartbeatFailing' | 'setupFailed' | 'accountOnHold'
-
-export interface NotificationSettings {
-  enabled: boolean
-  smtp: {
-    host: string
-    port: number
-    security: SmtpSecurity
-    username: string
-    fromAddress: string
-    /** The password itself is never returned. */
-    hasPassword: boolean
-  }
-  recipients: string[]
-  events: Record<NotificationEvent, boolean>
-  heartbeatFailureThreshold: number
-}
-
-/** PUT/test body. smtp.password: string = set, null = clear, omitted = keep the saved one. */
-export interface NotificationSettingsInput {
-  enabled?: boolean
-  smtp?: Partial<Omit<NotificationSettings['smtp'], 'hasPassword'>> & { password?: string | null }
-  recipients?: string[]
-  events?: Partial<Record<NotificationEvent, boolean>>
-  heartbeatFailureThreshold?: number
-}
-
 // ---------- System (automation settings + kill switch) ----------
 export interface SystemSettings {
   heartbeatIntervalMs: number

@@ -1,5 +1,5 @@
 const path = require('node:path');
-const { app, BrowserWindow, session, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, dialog, session, shell, safeStorage } = require('electron');
 const { registerScheme, registerAppProtocol, isAppUrl, ORIGIN } = require('./appProtocol');
 const { registerIpc } = require('./ipc');
 const db = require('./db');
@@ -9,6 +9,7 @@ const systemSettings = require('./services/systemSettingsService');
 const killSwitch = require('./services/killSwitchService');
 const heartbeatScheduler = require('./services/heartbeatScheduler');
 const events = require('./services/events');
+const { recordSystemAction } = require('./services/auditTrail');
 const logger = require('./logger');
 
 const DB_FILE = 'panda.db';
@@ -32,6 +33,25 @@ const START_URL = DEV_URL || `${ORIGIN}/`;
 registerScheme();
 
 let mainWindow = null;
+// Set once the quit is actually going ahead (nothing running, or the user confirmed) — lets the
+// window and app close for real on the next pass, instead of looping back through confirmation.
+let quitConfirmed = false;
+
+// How long to let a heartbeat that's already mid-request finish and log its result before we pull
+// the database out from under it. stopAll()/the kill switch only cancel *future* ticks.
+const SHUTDOWN_GRACE_MS = 3000;
+
+/**
+ * Arm the kill switch (persists, so nothing silently resumes on the next launch) and give any
+ * heartbeat already talking to the platform a moment to land. Does NOT close the database — the
+ * caller decides when that's actually safe (see 'will-quit' below and the signal handler).
+ * Shared by the confirmed-quit dialog and the SIGTERM/SIGINT handlers so both stop things the same way.
+ */
+async function stopEverything(reason, meta) {
+    const result = killSwitch.activate({ reason });
+    recordSystemAction('kill_switch_activated', { meta: { automatic: true, stoppedHeartbeats: result.stoppedHeartbeats, ...meta } });
+    await heartbeatScheduler.waitForIdle(SHUTDOWN_GRACE_MS);
+}
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
@@ -57,6 +77,13 @@ function createMainWindow() {
     mainWindow.once('ready-to-show', () => {
         mainWindow.maximize();
         mainWindow.show();
+    });
+    // The close (titlebar) button always goes through the same quit confirmation as Cmd+Q / Alt+F4 —
+    // this app has no system tray yet to keep running quietly in, so "close the window" means "quit".
+    mainWindow.on('close', (event) => {
+        if (quitConfirmed) return; // already decided for real — let it close
+        event.preventDefault();
+        app.quit();
     });
     mainWindow.on('closed', () => { mainWindow = null; });
 
@@ -112,10 +139,68 @@ if (!app.requestSingleInstanceLock()) {
         if (process.platform !== 'darwin') app.quit();
     });
 
-    // Stop timers before the database closes under them; node:sqlite has no in-flight writes
-    // to flush, but a heartbeat mid-tick could otherwise try to write after close().
-    app.on('before-quit', () => {
-        heartbeatScheduler.stopAll();
-        db.close();
+    // Confirm before quitting while heartbeats are running, so closing the window or Cmd+Q / Alt+F4
+    // doesn't silently stop every account's heartbeat loop. Nothing to confirm if nothing is running.
+    // This is the single place that decides a quit is really happening (quitConfirmed) — the window's
+    // own 'close' handler above always routes here instead of closing on its own.
+    //
+    // Deliberately does NOT close the database here: before-quit only means a quit was *requested* —
+    // if anything downstream cancels or stalls it (another before-quit listener, a window refusing to
+    // close, a stray OS-level quit reaching the wrong unsigned-dev-build process, …) the app would be
+    // left running with no database, erroring on every request until force-quit. db.close() happens in
+    // 'will-quit' instead, which only fires once Electron has actually committed to exiting.
+    app.on('before-quit', (event) => {
+        if (quitConfirmed) return; // already decided — let every operation finish stopping and exit
+
+        const running = heartbeatScheduler.runningCount();
+        if (running === 0) {
+            quitConfirmed = true;
+            heartbeatScheduler.stopAll();
+            return;
+        }
+
+        event.preventDefault();
+        const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+        dialog
+            .showMessageBox(parent, {
+                type: 'warning',
+                buttons: ['Cancel', 'Quit anyway'],
+                defaultId: 0,
+                cancelId: 0,
+                title: 'Quit Panda Bot?',
+                message: `This will stop heartbeats for ${running} active account${running === 1 ? '' : 's'} and arm the kill switch.`,
+                detail: 'Bets won’t be mirrored and sessions may expire while the app is closed. ' +
+                    'Nothing resumes on the next launch until you release the kill switch in Settings.'
+            })
+            .then(async ({ response }) => {
+                if (response !== 1) return;
+                quitConfirmed = true;
+                await stopEverything('App closed while heartbeats were running', { trigger: 'app_quit' });
+                app.quit();
+            });
     });
+
+    // Only fires once Electron has actually decided the quit is going through (windows closed,
+    // nothing cancelled it) — the one safe place to close the database for the normal quit paths.
+    app.on('will-quit', () => db.close());
+
+    // No window to show a dialog to, and no guarantee the OS gives us more than a moment before
+    // escalating to SIGKILL — so skip confirmation and go straight to the same shutdown the dialog's
+    // "Quit anyway" uses: arm the kill switch, let any in-flight heartbeat land, close the database.
+    // Covers `kill <pid>`, a process manager, logout/shutdown — anything that doesn't go through
+    // Electron's own quit flow and would otherwise just vanish the process mid-operation. Uses
+    // app.exit() (immediate, skips before-quit/will-quit/window-all-closed), so it closes the
+    // database itself instead of relying on 'will-quit'.
+    let shuttingDownViaSignal = false;
+    function handleTerminationSignal(signal) {
+        if (shuttingDownViaSignal || quitConfirmed) return;
+        shuttingDownViaSignal = true;
+        quitConfirmed = true;
+        logger.warn(`Received ${signal} — stopping heartbeats and shutting down`);
+        stopEverything(`Process received ${signal}`, { trigger: 'signal', signal })
+            .catch((err) => logger.error('Shutdown on signal failed', err.message))
+            .finally(() => { db.close(); app.exit(0); });
+    }
+    process.on('SIGTERM', () => handleTerminationSignal('SIGTERM'));
+    process.on('SIGINT', () => handleTerminationSignal('SIGINT'));
 }

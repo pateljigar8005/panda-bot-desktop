@@ -1,5 +1,4 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { formatDistanceToNow } from 'date-fns'
 import { AlertTriangle, Network, Pencil, Plus, RefreshCw, Stethoscope, Trash2, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -11,6 +10,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ProxyAccountsDialog } from '@/components/shared/ProxyAccountsDialog'
 import { IconAction } from '@/components/shared/IconAction'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { RelativeTime } from '@/components/shared/RelativeTime'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -147,7 +147,7 @@ export default function Proxies() {
         header: t('proxies.columnLastCheck'),
         meta: { filter: 'date' },
         sortUndefined: 'last',
-        cell: ({ row }) => (row.original.lastCheck ? formatDistanceToNow(new Date(row.original.lastCheck), { addSuffix: true }) : t('proxies.never')),
+        cell: ({ row }) => (row.original.lastCheck ? <RelativeTime iso={row.original.lastCheck} /> : t('proxies.never')),
       },
       { id: 'actions', header: () => <span className="block text-right">{t('accounts.columnActions')}</span>, enableSorting: false, cell: ({ row }) => <RowActions proxy={row.original} /> },
     ],

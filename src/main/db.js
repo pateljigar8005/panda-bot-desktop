@@ -167,7 +167,7 @@ const MIGRATIONS = [
     );
     CREATE INDEX audit_logs_time ON audit_logs (createdAt);
 
-    -- Singletons as JSON: 'system' (automation + kill switch), 'notifications'
+    -- Singletons as JSON: 'system' (automation + kill switch)
     CREATE TABLE settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
@@ -175,7 +175,7 @@ const MIGRATIONS = [
     );
     `,
     // Desktop app, single local user, OS-keychain-protected data folder is out of scope for this
-    // threat model: stop encrypting platform credentials at rest. (Proxy/SMTP passwords are
+    // threat model: stop encrypting platform credentials at rest. (Proxy passwords are
     // unrelated and stay encrypted — see encryptionService.)
     migrateCredentialsToPlain
 ];

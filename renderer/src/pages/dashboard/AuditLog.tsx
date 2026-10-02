@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useAuditFilters, useAuditLogs } from '@/hooks/useAuditLogs'
+import { useDateLocale } from '@/hooks/useDateLocale'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { getErrorMessage } from '@/services/api'
 import { cn } from '@/lib/utils'
@@ -45,8 +46,6 @@ const ACTION_KEYS: Record<string, string> = {
   master_created: 'auditLog.actionMasterCreated',
   master_updated: 'auditLog.actionMasterUpdated',
   master_deleted: 'auditLog.actionMasterDeleted',
-  notification_settings_updated: 'auditLog.actionNotificationSettingsUpdated',
-  notification_test_sent: 'auditLog.actionNotificationTestSent',
   system_settings_updated: 'auditLog.actionSystemSettingsUpdated',
   kill_switch_activated: 'auditLog.actionKillSwitchActivated',
   kill_switch_released: 'auditLog.actionKillSwitchReleased',
@@ -55,6 +54,16 @@ const ACTION_KEYS: Record<string, string> = {
 const actor = (entry: AuditEntry, t: TFunction) => (entry.meta?.automatic ? t('auditLog.systemAutomatic') : t('auditLog.you'))
 
 const actionLabel = (action: string, t: TFunction) => (ACTION_KEYS[action] ? t(ACTION_KEYS[action]) : action.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()))
+
+// Reuses the nav labels so "Account"/"Proxy"/… reads the same here as in the sidebar.
+const RESOURCE_TYPE_KEYS: Record<string, string> = {
+  account: 'nav.accounts',
+  proxy: 'nav.proxies',
+  master: 'nav.master',
+  settings: 'nav.settings',
+  system: 'auditLog.resourceTypeSystem',
+}
+const resourceTypeLabel = (type: string, t: TFunction) => (RESOURCE_TYPE_KEYS[type] ? t(RESOURCE_TYPE_KEYS[type]) : type)
 
 // ---------- Sorting ----------
 type Sort = { field: AuditSortField; order: 'asc' | 'desc' }
@@ -82,7 +91,7 @@ function SortHeader({ field, sort, onSort, children }: { field: AuditSortField; 
 // ---------- Advanced search ----------
 type Advanced = { resourceType: string; resourceName: string; ip: string; method: string; statusCode: string; message: string }
 const EMPTY_ADVANCED: Advanced = { resourceType: '', resourceName: '', ip: '', method: '', statusCode: '', message: '' }
-const RESOURCE_TYPE_VALUES = ['account', 'proxy', 'master', 'settings', 'system']
+const RESOURCE_TYPE_VALUES = ['account', 'proxy', 'master', 'system']
 const METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'].map((v) => ({ value: v, label: v }))
 
 function AdvancedSearch({
@@ -99,7 +108,7 @@ function AdvancedSearch({
   total?: number
 }) {
   const { t } = useTranslation()
-  const RESOURCE_TYPES = RESOURCE_TYPE_VALUES.map((v) => ({ value: v, label: t(`status.${v}`, v).replace(/^./, (c) => c.toUpperCase()) }))
+  const RESOURCE_TYPES = RESOURCE_TYPE_VALUES.map((v) => ({ value: v, label: resourceTypeLabel(v, t) }))
   const set = (key: keyof Advanced) => (v: string) => onChange({ ...value, [key]: v })
   const text = (key: keyof Advanced, label: string, placeholder: string, inputMode?: 'numeric') => (
     <div className="space-y-1.5">
@@ -181,6 +190,7 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
 
 function EntryDetails({ entry, onClose }: { entry: AuditEntry | null; onClose: () => void }) {
   const { t } = useTranslation()
+  const locale = useDateLocale()
   const hasRequest = !!entry?.request && typeof entry.request === 'object' && Object.keys(entry.request as object).length > 0
   const hasMeta = !!entry && Object.keys(entry.meta ?? {}).length > 0
   return (
@@ -190,7 +200,7 @@ function EntryDetails({ entry, onClose }: { entry: AuditEntry | null; onClose: (
           <>
             <DialogHeader>
               <DialogTitle>{actionLabel(entry.action, t)}</DialogTitle>
-              <DialogDescription>{formatExact(entry.createdAt)}</DialogDescription>
+              <DialogDescription>{formatExact(entry.createdAt, locale)}</DialogDescription>
             </DialogHeader>
             <dl className="divide-y">
               <Detail label={t('auditLog.by')}>{actor(entry, t)}</Detail>
@@ -199,7 +209,7 @@ function EntryDetails({ entry, onClose }: { entry: AuditEntry | null; onClose: (
                 {entry.message && <span className="ml-2 text-destructive">{entry.message}</span>}
               </Detail>
               <Detail label={t('auditLog.resource')}>
-                {entry.resourceType ? <span className="capitalize">{entry.resourceType}</span> : '—'}
+                {entry.resourceType ? <span className="capitalize">{resourceTypeLabel(entry.resourceType, t)}</span> : '—'}
                 {entry.resourceName && <span className="font-medium"> · {entry.resourceName}</span>}
                 {entry.resourceId && <span className="ml-2 font-mono text-xs text-muted-foreground">{entry.resourceId}</span>}
               </Detail>
@@ -225,6 +235,7 @@ function EntryDetails({ entry, onClose }: { entry: AuditEntry | null; onClose: (
 
 export default function AuditLog() {
   const { t } = useTranslation()
+  const locale = useDateLocale()
   const RESULTS = [
     { value: 'all', label: t('auditLog.allResults') },
     { value: 'success', label: t('auditLog.succeeded') },
@@ -369,7 +380,7 @@ export default function AuditLog() {
                   const href = resourceHref(e)
                   return (
                     <TableRow key={e._id} className="cursor-pointer" onClick={() => setSelected(e)}>
-                      <TableCell className="whitespace-nowrap tabular-nums">{formatExact(e.createdAt)}</TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">{formatExact(e.createdAt, locale)}</TableCell>
                       <TableCell className={cn('whitespace-nowrap', !!e.meta?.automatic && 'text-muted-foreground')}>{actor(e, t)}</TableCell>
                       <TableCell>
                         <div className="font-medium">{actionLabel(e.action, t)}</div>
@@ -387,7 +398,7 @@ export default function AuditLog() {
                             ) : (
                               <span className="font-medium">{e.resourceName ?? '—'}</span>
                             )}
-                            <span className="text-xs capitalize text-muted-foreground">{e.resourceType}</span>
+                            <span className="text-xs capitalize text-muted-foreground">{e.resourceType && resourceTypeLabel(e.resourceType, t)}</span>
                           </div>
                         ) : (
                           '—'

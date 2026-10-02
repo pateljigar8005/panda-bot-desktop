@@ -1,6 +1,5 @@
 import { Monitor } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { NotificationSettingsCard } from '@/components/settings/NotificationSettingsCard'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { SelectField } from '@/components/shared/SelectField'
 import { AutomationSettingsCard } from '@/components/system/AutomationSettingsCard'
@@ -13,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTabParam } from '@/hooks/useTabParam'
 import { useUiStore, type Language } from '@/store/uiStore'
 
-const TABS = ['general', 'automation', 'notifications'] as const
+const TABS = ['general', 'automation'] as const
 
 export default function Settings() {
   const { t } = useTranslation()
@@ -38,7 +37,6 @@ export default function Settings() {
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="general">{t('settings.tabGeneral')}</TabsTrigger>
           <TabsTrigger value="automation">{t('settings.tabAutomation')}</TabsTrigger>
-          <TabsTrigger value="notifications">{t('settings.tabNotifications')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
@@ -70,10 +68,6 @@ export default function Settings() {
         <TabsContent value="automation" className="space-y-6">
           <KillSwitchCard />
           <AutomationSettingsCard />
-        </TabsContent>
-
-        <TabsContent value="notifications">
-          <NotificationSettingsCard />
         </TabsContent>
       </Tabs>
     </>

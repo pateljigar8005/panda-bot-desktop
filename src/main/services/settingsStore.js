@@ -1,6 +1,6 @@
 const db = require('../db');
 
-/** Singleton settings, stored as JSON under a key ('system', 'notifications'). */
+/** Singleton settings, stored as JSON under a key ('system'). */
 function read(key) {
     const row = db.get().prepare('SELECT value FROM settings WHERE key = ?').get(key);
     return row ? JSON.parse(row.value) : null;

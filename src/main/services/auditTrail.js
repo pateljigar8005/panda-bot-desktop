@@ -26,8 +26,6 @@ const ACTIONS = {
     'PUT /master': 'master_updated',
     'DELETE /master': 'master_deleted',
 
-    'PUT /settings/notifications': 'notification_settings_updated',
-    'POST /settings/notifications/test': 'notification_test_sent',
     'PUT /system/settings': 'system_settings_updated',
     'POST /system/kill-switch': 'kill_switch_activated',
     'POST /system/kill-switch/release': 'kill_switch_released',
@@ -36,7 +34,7 @@ const ACTIONS = {
 };
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const RESOURCE_TYPES = { accounts: 'account', proxies: 'proxy', master: 'master', settings: 'settings', system: 'system' };
+const RESOURCE_TYPES = { accounts: 'account', proxies: 'proxy', master: 'master', system: 'system' };
 
 const MAX_STRING = 300;
 const MAX_DEPTH = 4;
