@@ -8,21 +8,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Spinner } from '@/components/ui/spinner'
 import { useBrowserStatus } from '@/hooks/useBrowserAutomation'
 import { useArmCopyBetting, useDisarmCopyBetting, useSystemStatus } from '@/hooks/useSystem'
 import { getErrorMessage } from '@/services/api'
 import { cn } from '@/lib/utils'
-
-function useDisarm() {
-  const { t } = useTranslation()
-  const disarm = useDisarmCopyBetting()
-  return () =>
-    disarm.mutate(undefined, {
-      onSuccess: () => toast.success(t('copyBetting.disarmedToast')),
-      onError: (error) => toast.error(t('copyBetting.disarmFailed'), { description: getErrorMessage(error) }),
-    })
-}
 
 /** Confirm, then arm: from this point, a detected master bet gets replicated to sub-accounts. */
 export function ArmCopyBettingDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -50,13 +39,38 @@ export function ArmCopyBettingDialog({ open, onOpenChange }: { open: boolean; on
   )
 }
 
-/** Settings → Automation: status, history and the controls. Disarming is instant — no dialog — so there's never friction stopping it. */
+/** Confirm, then disarm: a detected master bet stops being replicated to sub-accounts. */
+export function DisarmCopyBettingDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation()
+  const disarm = useDisarmCopyBetting()
+  const confirm = () =>
+    disarm.mutate(undefined, {
+      onSuccess: () => {
+        toast.success(t('copyBetting.disarmedToast'))
+        onOpenChange(false)
+      },
+      onError: (error) => toast.error(t('copyBetting.disarmFailed'), { description: getErrorMessage(error) }),
+    })
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('copyBetting.disarmTitle')}
+      description={t('copyBetting.disarmDescription')}
+      confirmLabel={t('copyBetting.disarm')}
+      loading={disarm.isPending}
+      onConfirm={confirm}
+    />
+  )
+}
+
+/** Settings → Automation: status, history and the controls. Both arming and disarming confirm first. */
 export function CopyBettingCard() {
   const { t } = useTranslation()
   const status = useSystemStatus()
   const [armOpen, setArmOpen] = useState(false)
-  const disarm = useDisarmCopyBetting()
-  const onDisarm = useDisarm()
+  const [disarmOpen, setDisarmOpen] = useState(false)
   const cb = status.data?.copyBetting
 
   return (
@@ -93,8 +107,8 @@ export function CopyBettingCard() {
         )}
 
         {cb?.armed ? (
-          <Button variant="outline" onClick={onDisarm} disabled={disarm.isPending}>
-            {disarm.isPending ? <Spinner /> : <ShieldOff />} {t('copyBetting.disarm')}
+          <Button variant="outline" onClick={() => setDisarmOpen(true)}>
+            <ShieldOff /> {t('copyBetting.disarm')}
           </Button>
         ) : (
           <Button className="bg-warning text-warning-foreground hover:bg-warning/90" onClick={() => setArmOpen(true)} disabled={!status.data}>
@@ -104,6 +118,7 @@ export function CopyBettingCard() {
         <p className="text-xs text-muted-foreground">{t('copyBetting.scopeHint')}</p>
       </CardContent>
       <ArmCopyBettingDialog open={armOpen} onOpenChange={setArmOpen} />
+      <DisarmCopyBettingDialog open={disarmOpen} onOpenChange={setDisarmOpen} />
     </Card>
   )
 }
@@ -116,8 +131,7 @@ export function CopyBettingBanner() {
   const { t } = useTranslation()
   const status = useSystemStatus()
   const browser = useBrowserStatus()
-  const disarm = useDisarmCopyBetting()
-  const onDisarm = useDisarm()
+  const [disarmOpen, setDisarmOpen] = useState(false)
   const armed = status.data?.copyBetting.armed
   const running = browser.data?.running
   if (!armed || !running) return null
@@ -130,9 +144,10 @@ export function CopyBettingBanner() {
           <b>{t('copyBetting.bannerOn')}</b> — {t('copyBetting.bannerDescription')}
         </span>
       </div>
-      <Button size="sm" variant="secondary" className="h-7" onClick={onDisarm} disabled={disarm.isPending}>
-        {disarm.isPending ? <Spinner /> : <ShieldOff />} {t('copyBetting.disarm')}
+      <Button size="sm" variant="secondary" className="h-7" onClick={() => setDisarmOpen(true)}>
+        <ShieldOff /> {t('copyBetting.disarm')}
       </Button>
+      <DisarmCopyBettingDialog open={disarmOpen} onOpenChange={setDisarmOpen} />
     </div>
   )
 }

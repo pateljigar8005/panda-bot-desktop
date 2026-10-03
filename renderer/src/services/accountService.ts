@@ -24,6 +24,9 @@ export const accountService = {
   /** Re-runs the platform sid/mc lookup; 502 with { message } if it still fails. */
   retrySetup: (id: string) => one(api.post(`/accounts/${id}/retry-setup`)),
   test: async (id: string) => (await api.post<AccountTestResult>(`/accounts/${id}/test`)).data,
+  refreshBalance: (id: string) => one(api.post(`/accounts/${id}/refresh-balance`)),
+  /** Refreshes every account with sid/mc, staggered like a copy-bet run; { refreshed, failed, total }. */
+  refreshBalances: async () => (await api.post<{ refreshed: number; failed: number; total: number }>('/accounts/refresh-balances')).data,
   /** One filtered page of logs, plus stats and seen codes for the time window — one request. */
   heartbeatLogs: async (id: string, params: HeartbeatLogParams) =>
     (await api.get<HeartbeatLogPage>(`/accounts/${id}/heartbeat-logs`, { params })).data,

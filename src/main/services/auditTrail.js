@@ -15,6 +15,8 @@ const ACTIONS = {
     'POST /accounts/:id/activate': 'account_activated',
     'POST /accounts/:id/test': 'account_connection_tested',
     'POST /accounts/:id/retry-setup': 'account_setup_retried',
+    'POST /accounts/:id/refresh-balance': 'account_balance_refreshed',
+    'POST /accounts/refresh-balances': 'account_balances_refreshed',
     'DELETE /accounts/:id/heartbeat-logs': 'heartbeat_logs_cleared',
 
     'POST /proxies': 'proxy_created',
@@ -37,7 +39,9 @@ const ACTIONS = {
 
     'POST /browser/launch': 'browser_launched',
     'POST /browser/close': 'browser_closed',
-    'DELETE /browser/traffic': 'browser_traffic_cleared'
+    'DELETE /browser/traffic': 'browser_traffic_cleared',
+
+    'POST /bets/:id/retry': 'bet_retried'
 };
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

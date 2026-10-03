@@ -38,6 +38,8 @@ const ACTION_KEYS: Record<string, string> = {
   account_activated: 'auditLog.actionAccountActivated',
   account_connection_tested: 'auditLog.actionAccountConnectionTested',
   account_setup_retried: 'auditLog.actionAccountSetupRetried',
+  account_balance_refreshed: 'auditLog.actionAccountBalanceRefreshed',
+  account_balances_refreshed: 'auditLog.actionAccountBalancesRefreshed',
   heartbeat_logs_cleared: 'auditLog.actionHeartbeatLogsCleared',
   activity_log_cleared: 'auditLog.actionActivityLogCleared',
   audit_log_cleared: 'auditLog.actionAuditLogCleared',
@@ -58,6 +60,7 @@ const ACTION_KEYS: Record<string, string> = {
   browser_launched: 'auditLog.actionBrowserLaunched',
   browser_closed: 'auditLog.actionBrowserClosed',
   browser_traffic_cleared: 'auditLog.actionBrowserTrafficCleared',
+  bet_retried: 'auditLog.actionBetRetried',
 }
 /** One local owner: an entry is either theirs or the app's own (automatic). */
 const actor = (entry: AuditEntry, t: TFunction) => (entry.meta?.automatic ? t('auditLog.systemAutomatic') : t('auditLog.you'))

@@ -2,6 +2,8 @@
 const db = require('../db');
 const { BetLogs } = require('../models');
 const { parsePagination } = require('../validators');
+const { notFound } = require('../errors');
+const copyBetExecutor = require('../services/copyBetExecutor');
 
 const SORTS = { newest: 'createdAt DESC', oldest: 'createdAt ASC' };
 const MAX_RANGE_MINUTES = 7 * 24 * 60;
@@ -57,6 +59,15 @@ function register(router) {
         }
 
         return { buckets, rangeHours: hours };
+    });
+
+    router.handle('POST /bets/:id/retry', async ({ params, audit }) => {
+        const original = BetLogs.findById(params.id);
+        if (!original) throw notFound('Bet log not found');
+
+        const row = await copyBetExecutor.retryBet(original);
+        audit({ meta: { masterBetId: original.masterBetId, accountId: original.accountId } });
+        return { bet: row };
     });
 }
 

@@ -223,7 +223,10 @@ const MIGRATIONS = [
     CREATE INDEX bet_logs_master ON bet_logs (masterBetId);
     CREATE INDEX bet_logs_account_time ON bet_logs (accountId, createdAt);
     CREATE INDEX bet_logs_time ON bet_logs (createdAt);
-    `
+    `,
+    // When lastBalance was last fetched live (manual refresh from the Accounts page) — null for
+    // every pre-existing account/row until the first refresh.
+    `ALTER TABLE accounts ADD COLUMN lastBalanceAt TEXT;`
 ];
 
 function migrate() {

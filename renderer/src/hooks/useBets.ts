@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { betsService } from '@/services/betsService'
 import type { BetLogParams } from '@/types'
 
@@ -14,3 +14,12 @@ export const useBets = (params: BetLogParams) =>
 /** Overview dashboard chart: sub-account copy-bet outcomes bucketed over time. */
 export const useBetsChart = (rangeHours: number) =>
   useQuery({ queryKey: ['bets', 'chart', rangeHours], queryFn: () => betsService.chart(rangeHours), refetchInterval: 30_000 })
+
+/** Manual retry of one failed sub-account leg; invalidates the list/chart like a fresh bet would. */
+export const useRetryBet = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => betsService.retry(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: betKeys.all }),
+  })
+}

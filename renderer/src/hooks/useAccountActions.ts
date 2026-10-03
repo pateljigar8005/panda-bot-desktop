@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import i18n from '@/i18n'
 import { getErrorMessage } from '@/services/api'
-import { useActivateAccount, useDeactivateAccount, useDeleteAccount, useTestAccount } from '@/hooks/useAccounts'
+import { useActivateAccount, useDeactivateAccount, useDeleteAccount, useRefreshBalance, useTestAccount } from '@/hooks/useAccounts'
 import type { Account } from '@/types'
 
 /** Row/detail actions shared by the accounts list and the account detail page. */
@@ -10,12 +10,16 @@ export function useAccountActions() {
   const deactivate = useDeactivateAccount()
   const activate = useActivateAccount()
   const del = useDeleteAccount()
+  const refreshBalance = useRefreshBalance()
   const onError = (error: unknown) => toast.error(getErrorMessage(error))
 
   return {
     testing: test.isPending,
     toggling: deactivate.isPending || activate.isPending,
     deleting: del.isPending,
+    refreshingBalance: refreshBalance.isPending,
+
+    refreshBalance: (account: Account) => refreshBalance.mutate(account._id, { onError }),
 
     runTest: (account: Account) =>
       test.mutate(account._id, {

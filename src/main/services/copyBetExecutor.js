@@ -7,6 +7,7 @@ const { computeStake } = require('./betSizing');
 const killSwitch = require('./killSwitchService');
 const systemSettings = require('./systemSettingsService');
 const { recordSystemAction } = require('./auditTrail');
+const { badRequest, conflict } = require('../errors');
 const events = require('./events');
 const logger = require('../logger');
 
@@ -160,4 +161,37 @@ async function onMasterBetDetected({ requestPayload, responseBody }) {
     logger.info('Copy-bet run finished', { masterBetId, placed, failed, skipped });
 }
 
-module.exports = { onMasterBetDetected };
+/**
+ * Manual retry of one failed sub-account leg (routes/bets.js, a button on the Bets page).
+ * Reuses the same selection/odds/stake the failed attempt logged, but — like every bet this app
+ * sends — generates fresh bet-slip ids rather than resending the ones that failed. Still gated by
+ * the kill switch (a manual click still places a real-money bet); not gated by the copy-betting
+ * armed flag, since the user explicitly chose this one bet, the same way "Test connection" isn't
+ * gated by anything but is still a deliberate per-row action.
+ */
+async function retryBet(betLog) {
+    if (betLog.accountType !== 'sub' || betLog.status !== 'failed') throw badRequest('Only a failed sub-account bet can be retried');
+    if (!betLog.requestPayload) throw badRequest('No request payload was recorded for this bet');
+    if (killSwitch.isActive()) throw conflict('Kill switch is active');
+
+    const account = Accounts.findById(betLog.accountId);
+    if (!account) throw badRequest('That sub-account no longer exists');
+    if (!isReadyForBetting(account)) throw badRequest('Account is not active, or missing sid/mc');
+
+    const leg = { matchName: betLog.matchName, marketValue: betLog.marketValue, selection: betLog.selection, odds: betLog.odds };
+    const payload = adaptPayload(betLog.requestPayload, betLog.stake);
+
+    try {
+        const result = await placeBetForAccount(account, payload);
+        if (result.success) Accounts.update(account._id, { totalBetsPlaced: (account.totalBetsPlaced || 0) + 1 });
+        return logLeg(betLog.masterBetId, {
+            accountType: 'sub', account, status: result.success ? 'executed' : 'failed', leg, stake: betLog.stake,
+            responseCode: result.responseCode, errorMessage: result.success ? null : `Platform returned ${result.responseCode}`,
+            requestPayload: payload, responseBody: result.responseBody
+        });
+    } catch (err) {
+        return logLeg(betLog.masterBetId, { accountType: 'sub', account, status: 'failed', leg, stake: betLog.stake, errorMessage: err.message, requestPayload: payload });
+    }
+}
+
+module.exports = { onMasterBetDetected, retryBet };

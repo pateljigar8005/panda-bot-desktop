@@ -1,8 +1,9 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { AlertTriangle, Eye, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2, Users, Wifi } from 'lucide-react'
+import { AlertTriangle, Eye, Pencil, Plus, Power, PowerOff, RefreshCw, Trash2, Users, Wallet, Wifi } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { DataTable } from '@/components/shared/DataTable'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -16,7 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SelectField } from '@/components/shared/SelectField'
-import { isSetupIncomplete, useAccounts } from '@/hooks/useAccounts'
+import { isSetupIncomplete, useAccounts, useRefreshBalances } from '@/hooks/useAccounts'
 import { canToggle, isOff, toggleLabel, useAccountActions } from '@/hooks/useAccountActions'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { getErrorMessage } from '@/services/api'
@@ -26,6 +27,25 @@ export const deviceLabel = (id: Account['deviceId']) => (id === '1' ? 'iOS' : 'A
 
 // Every possible value, so filters offer all of them — not just those on the current page
 const STATUSES: AccountStatus[] = ['active', 'inactive', 'on_hold', 'expired', 'banned']
+
+function BalanceCell({ account }: { account: Account }) {
+  const { t } = useTranslation()
+  const actions = useAccountActions()
+  return (
+    <div className="flex items-center gap-1">
+      <span title={account.lastBalanceAt ? t('accounts.balanceAsOf', { time: new Date(account.lastBalanceAt).toLocaleString() }) : undefined}>
+        {account.lastBalance.toFixed(2)}
+      </span>
+      <IconAction
+        label={t('accounts.refreshBalance')}
+        icon={RefreshCw}
+        onClick={() => actions.refreshBalance(account)}
+        loading={actions.refreshingBalance}
+        disabled={isSetupIncomplete(account)}
+      />
+    </div>
+  )
+}
 
 function RowActions({ account }: { account: Account }) {
   const { t } = useTranslation()
@@ -105,7 +125,7 @@ export default function Accounts() {
         meta: { filter: 'number' },
         cell: ({ row }) => (isSetupIncomplete(row.original) ? <SetupIssueBadge account={row.original} /> : <HeartbeatErrorsButton account={row.original} />),
       },
-      { accessorKey: 'lastBalance', header: t('accounts.columnBalance'), meta: { filter: 'number' }, cell: ({ row }) => row.original.lastBalance.toFixed(2) },
+      { accessorKey: 'lastBalance', header: t('accounts.columnBalance'), meta: { filter: 'number' }, cell: ({ row }) => <BalanceCell account={row.original} /> },
       { id: 'actions', header: () => <span className="block text-right">{t('accounts.columnActions')}</span>, enableSorting: false, cell: ({ row }) => <RowActions account={row.original} /> },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,6 +152,8 @@ export default function Accounts() {
   const hasFilters = !!status || !!debouncedSearch
   const showEmpty = !isLoading && !isError && data?.pagination.total === 0 && !hasFilters
 
+  const refreshBalances = useRefreshBalances()
+
   return (
     <>
       <PageHeader
@@ -139,6 +161,18 @@ export default function Accounts() {
         description={t('accounts.description')}
         actions={
           <>
+            <Button
+              variant="outline"
+              onClick={() =>
+                refreshBalances.mutate(undefined, {
+                  onSuccess: ({ refreshed, failed }) => toast.success(t('accounts.balancesRefreshed', { refreshed, failed })),
+                  onError: (error) => toast.error(getErrorMessage(error)),
+                })
+              }
+              disabled={refreshBalances.isPending}
+            >
+              <Wallet className={refreshBalances.isPending ? 'animate-pulse' : undefined} /> {t('accounts.refreshBalances')}
+            </Button>
             <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
               <RefreshCw className={isFetching ? 'animate-spin' : undefined} /> {t('common.refresh')}
             </Button>

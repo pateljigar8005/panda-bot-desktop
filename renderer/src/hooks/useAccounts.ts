@@ -74,5 +74,9 @@ export const useAssignProxy = () => {
 /** Not cached: a connection test is a one-off action with a result to toast. */
 export const useTestAccount = () => useMutation({ mutationFn: (id: string) => accountService.test(id) })
 
+export const useRefreshBalance = () => useAccountMutation((id: string) => accountService.refreshBalance(id))
+/** Bulk refresh; not cached itself, but invalidates the list like every other account mutation. */
+export const useRefreshBalances = () => useAccountMutation(() => accountService.refreshBalances())
+
 /** Heartbeats need sid/mc; without them the scheduler never starts. sid is always generated locally — mc is what the platform lookup actually proves. */
 export const isSetupIncomplete = (account: Pick<Account, 'sid' | 'mc'>) => !account.sid || !account.mc

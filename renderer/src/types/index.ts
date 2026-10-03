@@ -44,6 +44,8 @@ export interface Account {
   status: AccountStatus
   lastHeartbeatAt?: string
   lastBalance: number
+  /** When lastBalance was last fetched live (manual refresh). Null until the first refresh. */
+  lastBalanceAt?: string | null
   /** Every failed heartbeat since the log was last cleared (matches the log). Reset only by Clear log. */
   heartbeatErrors: number
   /** Current failure streak; 0 after any successful heartbeat. Drives auto-hold. */

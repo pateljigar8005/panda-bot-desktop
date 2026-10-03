@@ -9,7 +9,7 @@ const { pick, parsePagination } = require('../validators');
 const { parseTokenUrl } = require('../services/urlParserService');
 const { readTokenUrl, toJSONWithTokenUrl } = require('../services/tokenUrlService');
 const { assertUidAvailable } = require('../services/accountIdentityService');
-const { fetchUserInfo, sendHeartbeat } = require('../services/platformClient');
+const { fetchUserInfo, sendHeartbeat, fetchBalance } = require('../services/platformClient');
 const { generateSid } = require('../services/signatureService');
 const heartbeatScheduler = require('../services/heartbeatScheduler');
 const logger = require('../logger');
@@ -19,6 +19,8 @@ const DEVICE_IDS = ['1', '2'];
 const BET_MODES = ['fixed', 'proportional'];
 const STATUSES = ['active', 'inactive', 'on_hold', 'expired', 'banned'];
 const NO_CODE = 'none';
+/** Same 500–750ms stagger copyBetExecutor uses between sub-accounts — a bulk balance refresh is still a burst of requests across accounts. */
+const stagger = () => new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 250));
 const LOG_SORTS = { newest: 'createdAt DESC', oldest: 'createdAt ASC', slowest: 'latencyMs DESC, createdAt DESC' };
 const MAX_RANGE_MINUTES = 7 * 24 * 60; // logs are pruned after config.heartbeatLogRetentionDays
 
@@ -274,6 +276,41 @@ function register(router) {
         const start = Date.now();
         const result = await sendHeartbeat(account);
         return { success: result.success, latencyMs: Date.now() - start, message: result.success ? 'Heartbeat OK' : 'Heartbeat failed' };
+    });
+
+    router.handle('POST /accounts/:id/refresh-balance', async ({ params }) => {
+        const account = Accounts.findById(params.id);
+        if (!account) throw notFound('Account not found');
+        if (!account.sid || !account.mc) {
+            throw badRequest('Account is missing sid/mc. Please update the token URL or recreate the account.');
+        }
+
+        const result = await fetchBalance(account);
+        if (!result.success) throw new AppError(502, result.error || 'Could not fetch balance');
+
+        const updated = Accounts.update(account._id, { lastBalance: result.balance, lastBalanceAt: new Date().toISOString() });
+        return { account: accountJSON(updated) };
+    });
+
+    // Refreshes every account with sid/mc (regardless of status — an inactive account's balance
+    // is still worth seeing before deciding to reactivate it), staggered like a copy-bet run.
+    router.handle('POST /accounts/refresh-balances', async ({ audit }) => {
+        const accounts = Accounts.find({ where: 'sid IS NOT NULL AND mc IS NOT NULL', params: [] });
+        let refreshed = 0, failed = 0;
+
+        for (const account of accounts) {
+            const result = await fetchBalance(account);
+            if (result.success) {
+                Accounts.update(account._id, { lastBalance: result.balance, lastBalanceAt: new Date().toISOString() });
+                refreshed++;
+            } else {
+                failed++;
+            }
+            await stagger();
+        }
+
+        audit({ meta: { refreshed, failed, total: accounts.length } });
+        return { refreshed, failed, total: accounts.length };
     });
 
     // GET /accounts/:id/heartbeat-logs -- one page of logs, plus stats and seen codes for the
